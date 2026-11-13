@@ -1,0 +1,2915 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Sound Islands｜20 世紀聲音實驗室</title>
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Three.js & OrbitControls -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+  <!-- Google Fonts: Inter & Noto Sans TC -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&family=Noto+Sans+TC:wght@400;500;700;900&display=swap" rel="stylesheet">
+
+  <style>
+    body {
+      font-family: 'Inter', 'Noto Sans TC', sans-serif;
+      margin: 0;
+      padding: 0;
+      overflow: hidden;
+      background-color: #030712;
+      color: #f8fafc;
+      user-select: none;
+    }
+    #webgl-canvas {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100vw;
+      height: 100vh;
+      display: block;
+      z-index: 1;
+    }
+    .custom-scrollbar::-webkit-scrollbar {
+      width: 6px;
+    }
+    .custom-scrollbar::-webkit-scrollbar-track {
+      background: rgba(15, 23, 42, 0.6);
+      border-radius: 4px;
+    }
+    .custom-scrollbar::-webkit-scrollbar-thumb {
+      background: rgba(56, 189, 248, 0.4);
+      border-radius: 4px;
+    }
+    .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+      background: rgba(56, 189, 248, 0.7);
+    }
+    .glass-panel {
+      background: rgba(15, 23, 42, 0.82);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      border: 1px solid rgba(255, 255, 255, 0.12);
+    }
+    .glow-shadow {
+      box-shadow: 0 0 25px -5px rgba(56, 189, 248, 0.35);
+    }
+    /* 3D 浮空島嶼標籤樣式 */
+    .island-screen-label {
+      position: absolute;
+      transform: translate(-50%, -100%);
+      pointer-events: auto;
+      cursor: pointer;
+      z-index: 10;
+      transition: opacity 0.25s, transform 0.25s;
+    }
+    .island-screen-label:hover {
+      transform: translate(-50%, -108%) scale(1.06);
+    }
+    /* 時間軸活躍與非活躍標籤狀態 */
+    .island-label-active {
+      opacity: 1 !important;
+      transform: translate(-50%, -100%) scale(1.12) !important;
+      filter: drop-shadow(0 0 16px rgba(56, 189, 248, 0.6));
+    }
+    .island-label-inactive {
+      opacity: 0.18 !important;
+      transform: translate(-50%, -95%) scale(0.85) !important;
+      filter: grayscale(90%);
+    }
+    /* 鍵盤無障礙與按鈕發光 */
+    button:focus-visible {
+      outline: 2px solid #38bdf8;
+      outline-offset: 2px;
+    }
+  </style>
+</head>
+<body class="relative w-screen h-screen overflow-hidden bg-slate-950 text-slate-100">
+
+  <!-- 3D WebGL Canvas 畫布 -->
+  <canvas id="webgl-canvas"></canvas>
+
+  <!-- 3D 浮空文字標籤容器 -->
+  <div id="labels-container" class="absolute inset-0 pointer-events-none z-10 overflow-hidden"></div>
+
+  <!-- ========================================================================
+       頂部導航列 (Header & Brand Bar)
+       ======================================================================== -->
+  <header class="absolute top-3 left-3 right-3 z-20 flex items-center justify-between pointer-events-none select-none">
+    <!-- 左側：洪佳慧老師頭像與網站標題 -->
+    <div class="pointer-events-auto glass-panel px-3.5 py-2 rounded-2xl flex items-center gap-3 shadow-xl border border-slate-700/80">
+      <!-- 洪佳慧老師頭像 (點擊開啟導聆會客室) -->
+      <button id="btn-open-teacher" class="relative group flex items-center justify-center focus:outline-none" title="點擊拜訪洪佳慧老師導聆會客室">
+        <div class="w-11 h-11 rounded-full p-0.5 bg-gradient-to-tr from-amber-400 via-rose-500 to-sky-400 shadow-lg group-hover:scale-105 transition">
+          <img 
+            id="nav-teacher-img"
+            src="https://lh3.googleusercontent.com/d/1f9tsxt6rdSJBI3ljd5HtjCqi8Bbq4YNA"
+            alt="洪佳慧老師"
+            referrerpolicy="no-referrer"
+            class="w-full h-full rounded-full object-cover object-top bg-slate-900"
+            onerror="this.onerror=null; this.src='teacher.png';"
+          />
+        </div>
+        <span class="absolute -bottom-1 -right-1 px-1.5 py-0.2 text-[9px] font-black rounded-full bg-amber-400 text-slate-950 shadow">
+          師
+        </span>
+      </button>
+
+      <div>
+        <div class="flex items-center gap-2">
+          <h1 class="text-sm sm:text-base font-black tracking-tight text-white flex items-center gap-1.5">
+            <span>Sound Islands</span>
+            <span class="text-sky-400 font-light">｜</span>
+            <span class="text-xs sm:text-sm text-sky-200">20 世紀聲音實驗室</span>
+          </h1>
+          <span class="hidden md:inline-flex px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-400/20 text-amber-300 border border-amber-400/30">
+            洪佳慧老師 導聆
+          </span>
+        </div>
+        <p class="text-[11px] text-slate-400 hidden sm:block">
+          當音樂不再只有一種規則，你會聽見什麼？
+        </p>
+      </div>
+    </div>
+
+    <!-- 右側功能按鈕區：全景、音樂關係網、操作說明 -->
+    <div class="pointer-events-auto flex items-center gap-2 glass-panel p-1.5 rounded-2xl shadow-xl border border-slate-700/80">
+      <!-- 3D 全景 -->
+      <button id="btn-overview" class="px-3 py-1.5 text-xs font-bold rounded-xl bg-slate-800/80 hover:bg-slate-700 text-slate-200 hover:text-white transition flex items-center gap-1.5 shadow" title="重設視角回到全景">
+        <svg class="w-3.5 h-3.5 text-sky-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3.055 11H5a2 2 0 012 2v1a2 2 0 002 2 2 2 0 012 2v2.945M8 3.935V5.5A2.5 2.5 0 0010.5 8h.5a2 2 0 012 2 2 2 0 104 0 2 2 0 012-2h1.064M15 20.488V18a2 2 0 012-2h3.064M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+        <span class="hidden sm:inline">全景</span>
+      </button>
+
+      <!-- 音樂關係網開關按鈕 -->
+      <button id="btn-toggle-relations" class="px-3 py-1.5 text-xs font-bold rounded-xl bg-slate-800/80 hover:bg-sky-600 text-slate-200 hover:text-white transition flex items-center gap-1.5 shadow" title="開啟或取消音樂關係網絡">
+        <svg id="relations-btn-icon" class="w-3.5 h-3.5 text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"></path></svg>
+        <span id="relations-btn-label">音樂關係網</span>
+      </button>
+
+      <!-- 操作說明 -->
+      <button id="btn-open-help" class="px-3 py-1.5 text-xs font-bold rounded-xl bg-slate-800/80 hover:bg-slate-700 text-slate-200 hover:text-white transition flex items-center gap-1.5 shadow" title="操作說明與學習地圖">
+        <svg class="w-3.5 h-3.5 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+        <span class="hidden sm:inline">說明</span>
+      </button>
+    </div>
+  </header>
+
+  <!-- ========================================================================
+       底部時間軸探索 (Timeline Slider 1890 - 2000)
+       ======================================================================== -->
+  <footer class="absolute bottom-3 left-3 right-3 z-20 flex flex-col items-center pointer-events-none">
+    <div class="pointer-events-auto w-full max-w-3xl glass-panel px-5 py-3 rounded-2xl shadow-2xl flex flex-col gap-2 border border-slate-700/70">
+      
+      <!-- 頂部資訊列：年份大徽章與並存流派統計 -->
+      <div class="flex items-center justify-between flex-wrap gap-2 text-xs">
+        <div class="flex items-center gap-2">
+          <span class="w-2.5 h-2.5 rounded-full bg-sky-400 animate-ping"></span>
+          <span class="font-bold text-sky-300">歷史年代探索軸</span>
+          <span id="timeline-status-text" class="text-[11px] text-slate-300 font-medium">（拖曳下方滑桿觀察歷史興衰）</span>
+        </div>
+        <div class="flex items-center gap-2">
+          <span id="timeline-year-badge" class="font-mono font-black text-amber-300 bg-amber-400/10 px-3 py-1 rounded-xl border border-amber-400/30 text-sm tracking-wide shadow">
+            全流派並存全覽
+          </span>
+          <button id="btn-timeline-reset" class="px-2.5 py-1 text-[11px] font-bold rounded-lg bg-slate-800 hover:bg-sky-600 hover:text-white text-slate-300 transition whitespace-nowrap shadow border border-slate-700">
+            ↺ 重設全覽
+          </button>
+        </div>
+      </div>
+
+      <!-- 滑桿與刻度軸 -->
+      <div class="space-y-1">
+        <div class="flex items-center gap-3">
+          <span class="text-[11px] text-slate-400 font-mono font-bold">1890</span>
+          <input 
+            id="timeline-slider" 
+            type="range" 
+            min="1890" 
+            max="2000" 
+            value="1890" 
+            step="1"
+            class="w-full h-2.5 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-amber-400 hover:accent-sky-400 transition"
+          />
+          <span class="text-[11px] text-slate-400 font-mono font-bold">2000</span>
+        </div>
+        <!-- 世紀刻度對齊標記 -->
+        <div class="flex justify-between text-[10px] text-slate-500 font-mono px-9 select-none">
+          <span>1900</span>
+          <span>1914 一戰</span>
+          <span>1930</span>
+          <span>1945 二戰</span>
+          <span>1960</span>
+          <span>1980</span>
+        </div>
+      </div>
+
+      <!-- 動態活躍流派彩色徽章容器 (拖曳時即時展示正在興盛的流派) -->
+      <div class="pt-1 border-t border-slate-800/80">
+        <div class="flex items-center gap-2 mb-1">
+          <span class="text-[10px] text-slate-400 font-bold uppercase tracking-wider">該年份興盛並存流派（點擊可聚焦島嶼）：</span>
+        </div>
+        <div id="timeline-active-tags" class="flex flex-wrap items-center gap-1.5 min-h-[26px]">
+          <!-- 由 JavaScript 即時渲染活躍流派標籤 -->
+        </div>
+      </div>
+
+    </div>
+  </footer>
+
+  <!-- ========================================================================
+       右側資訊與聲音實驗室側邊滑動面板 (Island Info & Lab Panel)
+       ======================================================================== -->
+  <aside id="info-panel" class="fixed top-0 right-0 h-full w-full sm:w-[480px] z-30 transform translate-x-full transition-transform duration-300 ease-out glass-panel border-l border-slate-700/80 shadow-2xl flex flex-col overflow-hidden">
+    
+    <!-- 面板頂端標題區 -->
+    <div class="p-4 border-b border-slate-800/80 flex items-center justify-between bg-slate-900/60">
+      <div class="flex items-center gap-2.5">
+        <span id="panel-badge" class="px-2.5 py-1 rounded-lg text-xs font-black tracking-wider uppercase bg-sky-500/20 text-sky-300 border border-sky-400/30">
+          ISLAND 01
+        </span>
+        <div>
+          <h2 id="panel-title" class="text-lg font-black text-white">印象樂派</h2>
+          <span id="panel-subtitle" class="text-xs text-slate-400 font-medium">Impressionism (1890s – 1920s)</span>
+        </div>
+      </div>
+      <button id="btn-close-panel" class="w-8 h-8 rounded-xl bg-slate-800/80 hover:bg-rose-500 hover:text-white transition flex items-center justify-center text-slate-400" title="關閉並返回全景">
+        ✕
+      </button>
+    </div>
+
+    <!-- 面板主要捲動內容 -->
+    <div class="flex-1 overflow-y-auto custom-scrollbar p-5 space-y-6">
+      
+      <!-- 第一區：認識流派 (Features) -->
+      <section class="space-y-2.5">
+        <h3 class="text-xs font-bold uppercase tracking-wider text-sky-400 flex items-center gap-1.5">
+          <span class="w-1.5 h-3.5 bg-sky-400 rounded-full"></span>
+          第一區：認識流派核心美學
+        </h3>
+        <p id="panel-history" class="text-xs text-slate-300 leading-relaxed bg-slate-900/40 p-3 rounded-xl border border-slate-800/80">
+          歷史敘述載入中...
+        </p>
+        <div class="space-y-1.5">
+          <span class="text-[11px] font-semibold text-slate-400">三大音樂特色：</span>
+          <ul id="panel-features" class="space-y-1 text-xs text-slate-200">
+            <!-- 動態插入 -->
+          </ul>
+        </div>
+      </section>
+
+      <!-- 第二區：代表作曲家與名作 (Composer & Youtube) -->
+      <section class="space-y-2.5 pt-2 border-t border-slate-800/80">
+        <h3 class="text-xs font-bold uppercase tracking-wider text-amber-400 flex items-center gap-1.5">
+          <span class="w-1.5 h-3.5 bg-amber-400 rounded-full"></span>
+          第二區：代表作曲家與名作
+        </h3>
+        <div class="bg-slate-900/50 p-3.5 rounded-xl border border-slate-800 space-y-2">
+          <div class="flex items-center justify-between">
+            <span class="text-xs text-slate-400">代表作曲家：</span>
+            <span id="panel-composer" class="text-xs font-bold text-amber-200 text-right">德布西 (Claude Debussy)</span>
+          </div>
+          <div class="flex items-center justify-between">
+            <span class="text-xs text-slate-400">代表作品：</span>
+            <span id="panel-masterpiece" class="text-xs font-bold text-white text-right">《海》(La Mer)</span>
+          </div>
+          <p id="panel-piece-reason" class="text-[11px] text-slate-300 leading-relaxed italic bg-slate-950/40 p-2 rounded-lg">
+            作品代表性說明...
+          </p>
+
+          <!-- YouTube 名作影音導聆與精選時間軸卡片 -->
+          <div class="mt-3 pt-3 border-t border-slate-800/80">
+            <div class="flex items-center justify-between mb-2">
+              <span class="text-xs font-bold text-red-400 flex items-center gap-1.5">
+                <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24"><path d="M19.615 3.184c-3.604-.246-11.631-.245-15.23 0-3.897.266-4.356 2.62-4.385 8.816.029 6.185.484 8.549 4.385 8.816 3.6.245 11.626.246 15.23 0 3.897-.266 4.356-2.62 4.385-8.816-.029-6.185-.484-8.549-4.385-8.816zm-10.615 12.816v-8l8 3.993-8 4.007z"/></svg>
+                大師原典演奏錄影
+              </span>
+              <a id="panel-yt-full-link" href="#" target="_blank" rel="noopener noreferrer" class="text-[11px] text-red-400 hover:text-red-300 underline font-semibold flex items-center gap-1">
+                開啟 YouTube 全曲 ↗
+              </a>
+            </div>
+            
+            <!-- 精華時間軸清單 -->
+            <div class="space-y-1.5">
+              <span class="text-[10px] text-slate-400 font-medium">建議聆聽時間軸（點擊直接跳至該秒數）：</span>
+              <div id="panel-yt-timestamps" class="space-y-1.5">
+                <!-- 動態插入時間點按鈕 -->
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- 第三區：聲音實驗室 (Interactive Audio Lab) -->
+      <section class="space-y-2.5 pt-2 border-t border-slate-800/80">
+        <div class="flex items-center justify-between">
+          <h3 class="text-xs font-bold uppercase tracking-wider text-emerald-400 flex items-center gap-1.5">
+            <span class="w-1.5 h-3.5 bg-emerald-400 rounded-full"></span>
+            第三區：聲音實驗室
+          </h3>
+          <span class="text-[10px] px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-300 border border-emerald-500/20">
+            教學原理示範
+          </span>
+        </div>
+        
+        <div class="bg-slate-900/60 p-4 rounded-xl border border-slate-800 space-y-3">
+          <div>
+            <h4 id="panel-exp-title" class="text-sm font-bold text-emerald-300">調色盤實驗</h4>
+            <p id="panel-exp-desc" class="text-xs text-slate-300 mt-1 leading-relaxed">
+              點擊色塊，感受不同音階的和聲色彩變化。
+            </p>
+          </div>
+
+          <!-- 動態載入專屬實驗介面容器 -->
+          <div id="panel-exp-container" class="space-y-3 pt-1">
+            <!-- 由 JavaScript 依 expType 動態渲染 -->
+          </div>
+
+          <div class="pt-2 flex items-center justify-between border-t border-slate-800/80">
+            <span class="text-[10px] text-slate-400">若有持續聲音可隨時點擊：</span>
+            <button id="btn-stop-audio" class="px-2.5 py-1 rounded bg-rose-500/20 hover:bg-rose-500 text-rose-300 hover:text-white text-xs font-bold transition flex items-center gap-1 border border-rose-500/30">
+              ⏹ 停止聲音
+            </button>
+          </div>
+        </div>
+      </section>
+
+      <!-- 第四區：想一想 (Reflective Thinking) -->
+      <section class="space-y-2.5 pt-2 border-t border-slate-800/80 pb-4">
+        <h3 class="text-xs font-bold uppercase tracking-wider text-purple-400 flex items-center gap-1.5">
+          <span class="w-1.5 h-3.5 bg-purple-400 rounded-full"></span>
+          第四區：想一想（素養導向探究）
+        </h3>
+        <div class="bg-slate-900/40 p-3.5 rounded-xl border border-slate-800/80 space-y-2.5">
+          <p id="panel-question" class="text-xs font-semibold text-slate-200 leading-relaxed">
+            探究問題載入中...
+          </p>
+          <button id="btn-toggle-hint" class="text-xs font-bold text-purple-300 hover:text-purple-200 flex items-center gap-1">
+            <span>💡 點擊展開思考提示</span>
+          </button>
+          <div id="panel-hint-box" class="hidden text-xs text-slate-300 bg-purple-950/30 p-2.5 rounded-lg border border-purple-800/40 leading-relaxed">
+            提示內容載入中...
+          </div>
+        </div>
+      </section>
+
+      <!-- 參觀完畢：一鍵返回全景按鈕 -->
+      <div class="pt-2 pb-6">
+        <button id="btn-finish-island" class="w-full py-3 px-4 rounded-2xl bg-gradient-to-r from-sky-600 via-sky-500 to-indigo-600 hover:from-sky-500 hover:to-indigo-500 text-white font-bold text-xs shadow-xl transition flex items-center justify-center gap-2 border border-sky-400/30 group">
+          <svg class="w-4 h-4 text-sky-200 group-hover:-translate-x-1 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 19l-7-7 7-7m8 14l-7-7 7-7"/></svg>
+          <span>🔭 探索完畢，返回全景點選其他島嶼</span>
+        </button>
+      </div>
+
+    </div>
+  </aside>
+
+  <!-- ========================================================================
+       洪佳慧老師 導聆會客室彈窗 (Teacher Bio & Mission Modal)
+       ======================================================================== -->
+  <div id="teacher-modal" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md hidden opacity-0 transition-opacity duration-200">
+    <div class="relative w-full max-w-lg glass-panel p-6 rounded-3xl shadow-2xl border border-amber-500/30 max-h-[90vh] overflow-y-auto custom-scrollbar">
+      <button id="btn-close-teacher" class="absolute top-4 right-4 w-8 h-8 rounded-full bg-slate-800 text-slate-300 hover:bg-rose-500 hover:text-white transition flex items-center justify-center font-bold">
+        ✕
+      </button>
+
+      <div class="text-center space-y-4">
+        <!-- 老師可愛全身水彩畫作展示卡 -->
+        <div class="relative mx-auto w-44 h-56 rounded-2xl overflow-hidden shadow-2xl border-2 border-amber-400/50 bg-slate-900 group">
+          <img 
+            id="modal-teacher-img"
+            src="https://lh3.googleusercontent.com/d/1f9tsxt6rdSJBI3ljd5HtjCqi8Bbq4YNA"
+            alt="洪佳慧老師 水彩動漫畫作"
+            referrerpolicy="no-referrer"
+            class="w-full h-full object-cover object-center"
+            onerror="this.onerror=null; this.src='teacher.png';"
+          />
+        </div>
+
+        <div>
+          <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-amber-400/10 border border-amber-400/30 text-amber-300 text-xs font-bold mb-1">
+            高中音樂教育・數位聲音探索
+          </div>
+          <h3 class="text-xl font-black text-white">洪佳慧 老師</h3>
+          <p class="text-sm font-bold text-rose-400 mt-0.5">「吼～加減會一點 🎧」</p>
+        </div>
+
+        <!-- 導聆信念與引言 -->
+        <div class="text-left bg-slate-900/60 p-4 rounded-2xl border border-slate-800 text-xs text-slate-300 leading-relaxed space-y-2">
+          <p class="font-bold text-sky-300">
+            親愛的同學，你是否也常好奇：「20世紀音樂到底在聽什麼？」
+          </p>
+          <p>
+            走進 20 世紀，音樂不再只有好聽的旋律與和諧的三和弦。德布西把和聲當成光影水波；荀白克勇敢擁抱不協和音；史特拉汶斯基在古典骨架中打破節奏；賴克用錯相玩出聲音萬花筒；凱吉更把世界上的靜默與偶然都當成樂章。
+          </p>
+          <p class="italic text-amber-200/90">
+            「20 世紀的音樂，不僅開拓了人們對音樂的想像，也改變了人們理解音樂、創造音樂與聆聽世界的方式」
+          </p>
+        </div>
+
+        <button id="btn-start-exploring" class="w-full py-3 rounded-xl bg-gradient-to-r from-sky-500 to-indigo-600 hover:from-sky-400 hover:to-indigo-500 font-bold text-sm text-white shadow-lg transition">
+          🚀 開始探索 3D 聲音島嶼
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ========================================================================
+       操作指引彈窗 (Help Modal)
+       ======================================================================== -->
+  <div id="help-modal" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md hidden opacity-0 transition-opacity duration-200">
+    <div class="relative w-full max-w-md glass-panel p-6 rounded-3xl shadow-2xl border border-sky-500/30">
+      <button id="btn-close-help" class="absolute top-4 right-4 w-8 h-8 rounded-full bg-slate-800 text-slate-300 hover:bg-rose-500 hover:text-white transition flex items-center justify-center font-bold">
+        ✕
+      </button>
+      <h3 class="text-base font-black text-sky-300 mb-3 flex items-center gap-2">
+        <span>🎮</span> 操作指引與學習地圖
+      </h3>
+      <div class="space-y-3 text-xs text-slate-300 leading-relaxed">
+        <div class="flex items-start gap-2 bg-slate-900/50 p-2.5 rounded-xl border border-slate-800">
+          <span class="text-base">🖱️</span>
+          <div>
+            <strong class="text-white block">3D 視角自由探索：</strong>
+            滑鼠左鍵拖曳可旋轉場景，滾輪縮放視角，右鍵平移。點擊任一座島嶼即可平滑推進特寫並開啟知識面板。
+          </div>
+        </div>
+        <div class="flex items-start gap-2 bg-slate-900/50 p-2.5 rounded-xl border border-slate-800">
+          <span class="text-base">🎹</span>
+          <div>
+            <strong class="text-white block">真實 Web Audio 發聲實驗：</strong>
+            每座島嶼皆具備真實發聲合成實驗，可自由切換音階色彩、調整波形濾波器、排列十二音矩陣或進行具體音樂變速倒轉。
+          </div>
+        </div>
+        <div class="flex items-start gap-2 bg-slate-900/50 p-2.5 rounded-xl border border-slate-800">
+          <span class="text-base">🕸️</span>
+          <div>
+            <strong class="text-white block">音樂關係網：</strong>
+            點擊右上角「音樂關係網」，觀察表現主義與音列主義、電子音樂與具體音樂、音列與機遇哲學的歷史鏈結。
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ========================================================================
+       音樂關係網互動對照導覽面板 (Music Relations Guide Panel)
+       ======================================================================== -->
+  <div id="relations-modal" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/85 backdrop-blur-md hidden opacity-0 transition-opacity duration-200">
+    <div class="relative w-full max-w-2xl glass-panel p-6 rounded-3xl shadow-2xl border border-sky-500/40 max-h-[92vh] overflow-y-auto custom-scrollbar flex flex-col gap-4">
+      <button id="btn-close-relations" class="absolute top-4 right-4 w-8 h-8 rounded-full bg-slate-800 text-slate-300 hover:bg-rose-500 hover:text-white transition flex items-center justify-center font-bold">
+        ✕
+      </button>
+
+      <div>
+        <div class="flex items-center gap-2 mb-1">
+          <span class="text-xl">🕸️</span>
+          <h3 class="text-lg font-black text-transparent bg-clip-text bg-gradient-to-r from-sky-300 via-cyan-200 to-amber-200">
+            20 世紀音樂關係網：歷史、技術與美學對抗
+          </h3>
+        </div>
+        <p class="text-xs text-slate-300 leading-relaxed">
+          20 世紀的音樂流派並不是八座孤立的島嶼，而是作曲家們為了解決前人困境、或是為了打破既有規則而激盪出的思想火花。
+        </p>
+      </div>
+
+      <!-- 圖例說明 (Legend) -->
+      <div class="flex flex-wrap items-center gap-2 text-[11px] bg-slate-900/70 p-3 rounded-2xl border border-slate-800">
+        <span class="text-slate-400 font-bold">關係圖例：</span>
+        <span class="px-2.5 py-1 rounded-lg bg-rose-500/20 text-rose-300 border border-rose-500/30 font-semibold flex items-center gap-1.5">
+          <span class="w-2 h-2 rounded-full bg-rose-500"></span> 🔴 歷史發展（從混亂中重建新秩序）
+        </span>
+        <span class="px-2.5 py-1 rounded-lg bg-purple-500/20 text-purple-300 border border-purple-500/30 font-semibold flex items-center gap-1.5">
+          <span class="w-2 h-2 rounded-full bg-purple-500"></span> 🟣 技術關聯（純電子訊號 vs. 現實聲響）
+        </span>
+        <span class="px-2.5 py-1 rounded-lg bg-amber-500/20 text-amber-300 border border-amber-500/30 font-semibold flex items-center gap-1.5">
+          <span class="w-2 h-2 rounded-full bg-amber-500"></span> 🟠 觀念比較（極端控制 vs. 機遇解放）
+        </span>
+      </div>
+
+      <!-- 三大核心關係比較卡 -->
+      <div class="space-y-3.5">
+        
+        <!-- 關係 1：表現主義 ↔ 音列主義 -->
+        <div class="bg-slate-900/60 p-4 rounded-2xl border border-rose-500/30 hover:border-rose-400/60 transition space-y-2.5">
+          <div class="flex items-center justify-between flex-wrap gap-2">
+            <div class="flex items-center gap-2">
+              <span class="px-2 py-0.5 rounded text-[10px] font-black bg-rose-500/20 text-rose-300 border border-rose-500/30">歷史發展</span>
+              <h4 class="text-sm font-bold text-white">表現主義 ⟷ 音列主義</h4>
+            </div>
+            <button class="btn-focus-relation px-3 py-1 rounded-xl bg-rose-600/30 hover:bg-rose-600 text-rose-200 hover:text-white text-xs font-bold transition flex items-center gap-1" data-pair="0">
+              🔭 雙島特寫對照
+            </button>
+          </div>
+          <p class="text-xs text-slate-300 leading-relaxed">
+            <strong class="text-rose-300">【從自由直覺到嚴密理性】</strong><br>
+            荀白克在表現主義時期（如《月光小丑》）大膽打破傳統大小調，但完全失去調性中心後，音樂很容易變得雜亂無章、難以支撐大型管弦樂曲式。為了解決這項結構危機，荀白克沈潛數年後發明了<strong>「十二音技法（Twelve-tone technique）」</strong>，以嚴謹的數學音列建立全新的組織秩序，開啟了音列主義時代。
+          </p>
+          <div class="text-[11px] bg-slate-950/60 p-2.5 rounded-xl border border-slate-800 text-slate-400">
+            💡 <strong>思考問題：</strong>當音樂失去傳統和聲中心時，除了靠「十二音數學排列」，還有其他方式可以讓音樂有結構感嗎？
+          </div>
+        </div>
+
+        <!-- 關係 2：電子音樂 ↔ 具體音樂 -->
+        <div class="bg-slate-900/60 p-4 rounded-2xl border border-purple-500/30 hover:border-purple-400/60 transition space-y-2.5">
+          <div class="flex items-center justify-between flex-wrap gap-2">
+            <div class="flex items-center gap-2">
+              <span class="px-2 py-0.5 rounded text-[10px] font-black bg-purple-500/20 text-purple-300 border border-purple-500/30">技術關聯</span>
+              <h4 class="text-sm font-bold text-white">電子音樂 ⟷ 具體音樂</h4>
+            </div>
+            <button class="btn-focus-relation px-3 py-1 rounded-xl bg-purple-600/30 hover:bg-purple-600 text-purple-200 hover:text-white text-xs font-bold transition flex items-center gap-1" data-pair="1">
+              🔭 雙島特寫對照
+            </button>
+          </div>
+          <p class="text-xs text-slate-300 leading-relaxed">
+            <strong class="text-purple-300">【無中生有 vs. 現實取材】</strong><br>
+            二戰後聲音工程跨入錄音室，歐洲掀起兩條前衛路線的大辯論：
+            <strong>德國科隆樂派（電子音樂）</strong>主張拋棄所有自然界的聲音，用純電子震盪器無中生有合成正弦波；而<strong>法國巴黎樂派（具體音樂）</strong>則主張走出戶外，錄製火車軌道、雨聲與鍋碗瓢盆，用盤帶進行倒放剪輯。這兩派最初激烈對立，但史托克豪森等人在 1950 年代中期將兩者結合（如《青年之歌》），孕育出當代豐富的電聲音樂。
+          </p>
+          <div class="text-[11px] bg-slate-950/60 p-2.5 rounded-xl border border-slate-800 text-slate-400">
+            💡 <strong>思考問題：</strong>由機器算出來的「正弦波」，跟錄音機錄下來的「火車鳴笛聲」，哪一個讓你覺得更具備音樂性？
+          </div>
+        </div>
+
+        <!-- 關係 3：音列主義 ↔ 機遇音樂 -->
+        <div class="bg-slate-900/60 p-4 rounded-2xl border border-amber-500/30 hover:border-amber-400/60 transition space-y-2.5">
+          <div class="flex items-center justify-between flex-wrap gap-2">
+            <div class="flex items-center gap-2">
+              <span class="px-2 py-0.5 rounded text-[10px] font-black bg-amber-500/20 text-amber-300 border border-amber-500/30">觀念比較</span>
+              <h4 class="text-sm font-bold text-white">音列主義 ⟷ 機遇音樂</h4>
+            </div>
+            <button class="btn-focus-relation px-3 py-1 rounded-xl bg-amber-600/30 hover:bg-amber-600 text-amber-200 hover:text-white text-xs font-bold transition flex items-center gap-1" data-pair="2">
+              🔭 雙島特寫對照
+            </button>
+          </div>
+          <p class="text-xs text-slate-300 leading-relaxed">
+            <strong class="text-amber-300">【極端掌控 vs. 完全放手】</strong><br>
+            二戰後的音列主義者發展出「全面序列主義」，試圖用精密的數學矩陣把音高、長度、強弱甚至音色都嚴密算定；而約翰・凱吉則走向完全相反的極端，他認為西方作曲家對聲音有太強烈的控制欲，因此透過擲骰子、易經或甚至直接合上琴蓋（《4分33秒》），將決定權徹底交還給現場環境與偶然性。兩者看似完全對立，卻共同對「作曲家到底該控制多少」提出深刻叩問。
+          </p>
+          <div class="text-[11px] bg-slate-950/60 p-2.5 rounded-xl border border-slate-800 text-slate-400">
+            💡 <strong>思考問題：</strong>一個是把每個細節控制到極限，一個是完全交給隨機，這兩種極端手法創作出來的音樂，聽起來為什麼有時反而讓人覺得很像？
+          </div>
+        </div>
+
+      </div>
+
+      <!-- 面板底部操作按鈕：提供明確的「取消關閉」與「保留連線」選項 -->
+      <div class="pt-2 flex items-center justify-between gap-3 border-t border-slate-800/80">
+        <button id="btn-cancel-relations" class="px-4 py-2 rounded-xl bg-slate-800 hover:bg-rose-600 text-slate-300 hover:text-white font-bold text-xs transition flex items-center gap-1.5 shadow">
+          <span>✕</span> 關閉並取消關係網
+        </button>
+        <button id="btn-done-relations" class="px-5 py-2 rounded-xl bg-gradient-to-r from-sky-500 to-indigo-600 hover:from-sky-400 hover:to-indigo-500 text-white font-bold text-xs shadow transition flex items-center gap-1.5">
+          <span>✓</span> 保留關係線，返回 3D 空間對照
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 懸浮提示通知 (Toast) -->
+  <div id="toast" class="fixed bottom-24 left-1/2 transform -translate-x-1/2 z-50 px-4 py-2 rounded-xl text-xs font-bold glass-panel text-sky-200 border border-sky-400/40 shadow-xl opacity-0 pointer-events-none transition-opacity duration-300">
+    提示訊息
+  </div>
+
+  <!-- ========================================================================
+       JavaScript 核心程式碼
+       ======================================================================== -->
+  <script>
+    /* ==========================================================================
+       1. 臺灣國家教育研究院（樂詞網）審定標準音樂史資料庫
+       ========================================================================== */
+    const ISLANDS_DATA = [
+      {
+        id: "island-01",
+        number: "ISLAND 01",
+        title: "印象樂派",
+        subtitle: "Impressionism",
+        period: "1890s – 1920s",
+        color: 0x38bdf8,
+        themeHex: "#38bdf8",
+        activeYears: [1890, 1920],
+        pos: { x: -28, y: 0, z: -16 },
+        history: "19 世紀末興起於法國。作曲家受到印象派畫作光影與象徵派詩歌啟發，打破傳統德奧嚴格的功能和聲法則，轉而追求朦朧的音響色彩、流動的水波氛圍與泛音光澤。",
+        features: [
+          "音色重於曲式：器樂音色如同畫家調色盤，和聲本身即是獨立的色彩體驗。",
+          "非傳統調式音階：廣泛運用五聲音階（Pentatonic）、全音音階（Whole-tone）與中世紀教會調式。",
+          "弱化功能和聲：常使用平行和弦（Parallel Chords）平移，消解主音與屬音的向心導向感。"
+        ],
+        composer: "德布西 (Claude Debussy)［同派音樂家：拉威爾 Maurice Ravel］",
+        masterpiece: "《海》(La Mer, 1905)",
+        pieceReason: "打破古典交響曲主題發展框架，以精湛配器捕捉拂曉薄霧、浪花翻騰與風的自由呼吸。",
+        youtubeUrl: "https://www.youtube.com/watch?v=fe1pB9KqHRg",
+        youtubeTimestamps: [
+          { time: "00:20", seconds: 20, label: "海上自黎明至正午", note: "低沉定音鼓與豎琴漣漪，五聲音階動機悠遠甦醒" },
+          { time: "06:30", seconds: 390, label: "破浪管弦高潮", note: "全音音階與平行和弦層疊爆發，管弦樂灑下金色陽光" },
+          { time: "16:55", seconds: 1015, label: "風與海的對話", note: "長笛與雙簧管交織出無重力漂浮的音色流動" }
+        ],
+        expTitle: "調色盤：如果和聲是一種顏色？",
+        expDesc: "切換五聲音階與全音音階，點選色塊聆聽琶音和聲或單音，並同步觀察 3D 島嶼周圍泛起的光波漣漪。",
+        expType: "impressionism",
+        question: "當德布西使用全音音階時，為什麼音樂聽起來好像『漂浮在空中』，找不到一個明確的『回家（主音）』方向？",
+        hint: "因為全音音階中每相鄰兩音均為『大二度（全音）』，完全沒有半音的向心引力，因此傳統功能和聲中導向主音的緊張與解決感消失了。"
+      },
+      {
+        id: "island-02",
+        number: "ISLAND 02",
+        title: "表現主義",
+        subtitle: "Expressionism",
+        period: "1905 – 1925",
+        color: 0xf43f5e,
+        themeHex: "#f43f5e",
+        activeYears: [1905, 1925],
+        pos: { x: -10, y: 2, z: -32 },
+        history: "發源於 20 世紀初奧地利與德國。受佛洛伊德潛意識學說與表現主義繪畫衝擊，作曲家轉向挖掘人類心靈深處的焦慮、恐懼、精神緊繃與荒謬戰慄。",
+        features: [
+          "自由無調性（Free Atonality）：徹底打破傳統大小調體系，不再有支配性的調性中心。",
+          "極端不協和音解放：大量使用小二度、大七度與三全音（Tritone），創造強烈心理壓迫感。",
+          "道白吟唱（Sprechstimme）：在唱歌與說話之間游移的極端表現手法。"
+        ],
+        composer: "荀白克 (Arnold Schoenberg)［同派音樂家：貝爾格 Alban Berg、魏本 Anton Webern］",
+        masterpiece: "《月光小丑》(Pierrot Lunaire, Op. 21, 1912)",
+        pieceReason: "由室內樂編制與女聲朗誦演出 21 首聯篇歌曲，開創道白吟唱與自由無調性經典範例。",
+        youtubeUrl: "https://www.youtube.com/watch?v=bd2cBUJmDr8",
+        youtubeTimestamps: [
+          { time: "01:25", seconds: 85, label: "第 1 首〈醉月〉起奏", note: "鋼琴落下如月光的無調性琴音，女聲以神經質的道白吟唱開口" },
+          { time: "13:45", seconds: 825, label: "第 8 首〈夜〉黑蛾蔽日", note: "低音單簧管（非低音管）、大提琴與鋼琴沉重動機，配搭女聲壓抑低吟" }
+        ],
+        expTitle: "失去調性中心之後",
+        expDesc: "比較「功能調性（C 大調協和三和弦）」與「表現主義無調性（小二度／三全音緊張程）」的心理張力差異。",
+        expType: "expressionism",
+        question: "在表現主義音樂中，『不協和音』真的只是一種『難聽的聲音』嗎？它在情感表達上扮演了什麼角色？",
+        hint: "不協和音不再需要被『解決』到協和音，它解放了聲音本身，成為直擊內心恐懼、戰慄與潛意識複雜情緒最有力的語言。"
+      },
+      {
+        id: "island-03",
+        number: "ISLAND 03",
+        title: "新古典主義",
+        subtitle: "Neoclassicism",
+        period: "1920s – 1950s",
+        color: 0xf59e0b,
+        themeHex: "#f59e0b",
+        activeYears: [1920, 1950],
+        pos: { x: 14, y: -1, z: -30 },
+        history: "一戰後興起。作曲家對晚期浪漫主義過度膨脹的情感與混亂感到厭倦，高喊『回到巴哈（Back to Bach）』，重新追求秩序、平衡、清澈對位與客觀形式美。",
+        features: [
+          "重拾古典曲式：重新採用奏鳴曲式、賦格、協奏曲與古代組曲結構。",
+          "透明對位織體：線條清晰明快，以精簡對位法取代厚重龐大的浪漫和聲。",
+          "現代語彙改造：在方整結構中注入突兀切分重音、複調性（Bitonality）與現代配器幽默。"
+        ],
+        composer: "斯特拉溫斯基 (Igor Stravinsky)［同派音樂家：普羅高菲夫 Sergei Prokofiev］",
+        masterpiece: "《普欽奈拉組曲》(Pulcinella Suite, 1920/1949)",
+        pieceReason: "改編自 18 世紀巴洛克手稿，注入不對稱現代切分音與俏皮配器，煥發全新生機。",
+        youtubeUrl: "https://www.youtube.com/watch?v=glbnrYF_0ck",
+        youtubeTimestamps: [
+          { time: "00:35", seconds: 35, label: "I. 序曲 Sinfonia 正式起奏", note: "巴洛克古典旋律注入現代俐落跳音與樂句呼吸" },
+          { time: "13:14", seconds: 794, label: "VI. 嘉禾舞曲與變奏", note: "古典舞曲框架；14:20 處由法國號、雙簧管與長笛交織優美變奏" },
+          { time: "17:17", seconds: 1037, label: "VII. 活潑快板 Vivo", note: "長號滑音與低音提琴滑稽二重奏，充滿戲謔與現代前衛感" }
+        ],
+        expTitle: "古典形式，現代改造",
+        expDesc: "對比『方整均衡的古典原型』與『斯特拉溫斯基式現代改造』，清楚聽見切分錯置重音與雙重調性（Bitonality）的銳利碰撞。",
+        expType: "neoclassical",
+        question: "新古典主義作曲家借用 200 年前的古典形式，為什麼我們一聽還是能認出這是 20 世紀的音樂？",
+        hint: "因為他們注入了現代作曲思維：突如其來的切分節奏、不協和的雙重調性（Bitonality），以及更精簡冷靜的現代管弦配器。"
+      },
+      {
+        id: "island-04",
+        number: "ISLAND 04",
+        title: "極簡音樂",
+        subtitle: "Minimalism",
+        period: "1960s – 當代",
+        color: 0x10b981,
+        themeHex: "#10b981",
+        activeYears: [1960, 2000],
+        pos: { x: 30, y: 1, z: -12 },
+        history: "1960 年代在美國興起。反對序列主義過度晦澀的數學計算，主張回到極度簡約的音樂材料，透過極微小的重複與漸進變異創造催眠般的律動。",
+        features: [
+          "材料極簡化：採用極簡短的音型（Pattern）不斷循環反覆。",
+          "相位錯移（Phasing）：完全相同的音型以微小速度差偏移，衍生全新複合節奏。",
+          "調性與脈動：保有清晰的持續低音或調性中心，節奏強烈且持續前進。"
+        ],
+        composer: "賴克 (Steve Reich)［同派音樂家：格拉斯 Philip Glass、萊利 Terry Riley］",
+        masterpiece: "《鋼琴相位》(Piano Phase, 1967)",
+        pieceReason: "極簡音樂里程碑。兩架鋼琴演奏完全相同的一段 12 音音型，微幅加速展現驚人的相位錯移美學。",
+        youtubeUrl: "https://www.youtube.com/watch?v=wNVzDGnkbDI",
+        youtubeTimestamps: [
+          { time: "00:15", seconds: 15, label: "兩架鋼琴齊奏", note: "兩位鋼琴家精準彈奏完全相同的 12 個十六分音符短句" },
+          { time: "01:40", seconds: 100, label: "開始微幅加速錯相", note: "第二架鋼琴微幅加速，兩個聲部產生如回音般的幻影複節奏" },
+          { time: "03:15", seconds: 195, label: "錯開一個音符鎖定", note: "相位精確錯開一個 16 分音符後再次同步，聽見全新子旋律" }
+        ],
+        expTitle: "重複，真的等於一模一樣嗎？",
+        expDesc: "啟動雙軌極簡音型，按下「Phase Shift」按鈕讓第二軌漸進錯位，聽見聲音交錯產生的新節奏。",
+        expType: "minimalism",
+        question: "極簡音樂看似不斷在重複同一句旋律，為什麼聆聽時卻感覺時間與旋律都在持續前進？",
+        hint: "因為我們的聽覺會在循環過程中自動組合出隱藏的『副產物旋律（Resultant Patterns）』，聽覺焦點隨時間不斷流動。"
+      },
+      {
+        id: "island-05",
+        number: "ISLAND 05",
+        title: "電子音樂",
+        subtitle: "Electronic Music",
+        period: "1950s – 當代",
+        color: 0x8b5cf6,
+        themeHex: "#8b5cf6",
+        activeYears: [1950, 2000],
+        pos: { x: 26, y: -2, z: 16 },
+        history: "二戰後在西德科隆廣播電台等工作室誕生。作曲家使用純電子訊號產生器、震盪器與濾波器，從零開始建構人類歷史上未曾存在過的聲音。",
+        features: [
+          "純電子合成：以正弦波、方波、鋸齒波等作為最基礎的聲音積木。",
+          "聲音參數精確掌控：音高、時值、音色與泛音包絡均能以赫茲與毫秒計算。",
+          "打破樂器物理極限：突破傳統木管、銅管與弦樂的發聲頻率與速度極限。"
+        ],
+        composer: "史托克豪森 (Karlheinz Stockhausen)［早期電子音樂先鋒］",
+        masterpiece: "《青年之歌》(Gesang der Jünglinge, 1955-56)",
+        pieceReason: "結合電子合成正弦波音塊與錄製的少年合唱人聲，是電子音樂與具體音樂合流的歷史性傑作。",
+        youtubeUrl: "https://www.youtube.com/watch?v=WTtzAmZFtds",
+        youtubeTimestamps: [
+          { time: "00:10", seconds: 10, label: "正弦脈衝與電子碎音", note: "純電子震盪器產生的正弦波叢集，展現冷冽而精確的聲響空間" },
+          { time: "03:00", seconds: 180, label: "人聲被電子解構重組", note: "少年朗誦《聖經》的母音被電子濾波器切割，在人聲與電訊號間穿梭" }
+        ],
+        expTitle: "自己創造一個聲音",
+        expDesc: "切換正弦波、方波、鋸齒波，並滑動調整濾波器截止頻率，觀察示波器波形與音色明暗變化。",
+        expType: "electronic",
+        question: "如果自然界的聲音都能用電子合成器模擬，那傳統演奏家在音樂中的價值會被取代嗎？",
+        hint: "電子音樂開闢了全新的聲音維度，但現場演奏家獨有的呼吸律動、肌肉觸鍵微差與臨場情感共鳴，依然是機器無法完全複製的。"
+      },
+      {
+        id: "island-06",
+        number: "ISLAND 06",
+        title: "音列主義",
+        subtitle: "Serialism",
+        period: "1920s – 1960s",
+        color: 0x6366f1,
+        themeHex: "#6366f1",
+        activeYears: [1920, 1965],
+        pos: { x: 6, y: 1, z: 28 },
+        history: "荀白克在 1920 年代發明「十二音技法（Twelve-tone technique）」，將半音階中 12 個音平等排列，任何音在另外 11 個音用完前不得重複，開創嚴謹的理性序列思維。",
+        features: [
+          "音高平等：十二個半音地位完全平等，徹底消除主音權力中心。",
+          "四種對位變形：音列可進行原形（Prime）、逆行（Retrograde）、倒影（Inversion）與逆行倒影（RI）。",
+          "序列化擴展：二戰後進一步將節奏、力度、音色也納入序列控制（全面序列主義）。"
+        ],
+        composer: "荀白克 (Arnold Schoenberg)［十二音技法創始人］",
+        masterpiece: "《管弦樂變奏曲》(Variations for Orchestra, Op. 31, 1928)",
+        pieceReason: "第一首完全採用十二音技法寫成的大型管弦樂作品，將嚴謹數學秩序與巴洛克賦格變奏融合。",
+        youtubeUrl: "https://www.youtube.com/watch?v=iL1XzH6gpAY",
+        youtubeTimestamps: [
+          { time: "03:25", seconds: 205, label: "大提琴唱出十二音原形", note: "管弦樂序奏後，大提琴以極具歌唱性的線條首次奏出完整的十二音原形音列" },
+          { time: "07:10", seconds: 430, label: "第一變奏：俐落對位", note: "音列被拆解分配給長笛、單簧管與低音提琴，展開精密的對位卡農" }
+        ],
+        expTitle: "十二個音，可以有多少種排列？",
+        expDesc: "建立 12 音序列，點擊播放「原形 Prime」、「逆行 Retrograde」或「倒影 Inversion」聽辨變形規則。",
+        expType: "serialism",
+        question: "音列主義以如此嚴格的數學規則來寫歌，作曲家個人的『情感』還存在於音樂中嗎？",
+        hint: "音列只是提供了一套組織音高的骨架，作曲家依然能透過節奏快慢、樂器音色配搭與強弱對比，注入豐沛的戲劇張力。"
+      },
+      {
+        id: "island-07",
+        number: "ISLAND 07",
+        title: "機遇音樂",
+        subtitle: "Chance Music",
+        period: "1950s – 當代",
+        color: 0xd97706,
+        themeHex: "#d97706",
+        activeYears: [1950, 2000],
+        pos: { x: -14, y: -1, z: 24 },
+        history: "約翰・凱吉深受東方《易經》與禪宗啟發，認為西方作曲家對聲音有太多控制欲。他主張把創作決定權交給機遇程序（如擲骰子、銅板），接受聲音的偶然性。",
+        features: [
+          "隨機創作程序：透過算籤、亂數表或易經決定音高、時值與音色。",
+          "表演不確定性：樂譜保留大量空白或圖表符號，讓演奏者依當下情境即興決定。",
+          "環境即音樂：打破『音樂』與『噪音』的界線，現場的一切偶發聲響皆是作品。"
+        ],
+        composer: "凱吉 (John Cage)",
+        masterpiece: "《4 分 33 秒》(4'33\", 1952)",
+        pieceReason: "演奏家走上台合上琴蓋，4 分 33 秒內不彈奏任何音符。真正的音樂是現場觀眾的呼吸、咳嗽聲與外在風聲。",
+        youtubeUrl: "https://www.youtube.com/watch?v=AWVUp12XPpU",
+        youtubeTimestamps: [
+          { time: "00:15", seconds: 15, label: "第一樂章合上琴蓋 (Tacet)", note: "佩特連科指揮柏林愛樂全體肅立，音樂廳陷入深沉專注的靜止" },
+          { time: "01:10", seconds: 70, label: "聽見現場環境雜音", note: "樂手翻動樂譜微聲、觀眾細微挪動與建築回響，成為音樂的核心" },
+          { time: "02:20", seconds: 140, label: "第二樂章開啟與合蓋", note: "時間在靜默中流動，引發對『聲音本質』哲學性的深層反思" }
+        ],
+        expTitle: "下一個聲音，由誰決定？",
+        expDesc: "點擊「交給機遇」按鈕擲出骰子，由隨機演算法隨機產生音高、音長與音色組合。",
+        expType: "chance",
+        question: "如果任何隨機的聲音都能是音樂，那『作曲家』和『普通聽眾』的差別在哪裡？",
+        hint: "約翰・凱吉認為作曲家的角色不再是製造聲音的『獨裁者』，而是設計出一個『框架』，引導聽眾用全新耳朵重新感知世界。"
+      },
+      {
+        id: "island-08",
+        number: "ISLAND 08",
+        title: "具體音樂",
+        subtitle: "Musique Concrète",
+        period: "1948 – 當代",
+        color: 0xb45309,
+        themeHex: "#b45309",
+        activeYears: [1948, 1980],
+        pos: { x: -30, y: 2, z: 8 },
+        history: "1948 年由法國工程師兼作曲家皮耶・薛菲創立。他不從抽象音符出發，而是走出戶外錄製真實世界的聲音（火車、腳步、關門聲），再以盤帶進行倒轉與剪輯。",
+        features: [
+          "具體聲音為材料：以錄音設備捕捉自然或人造聲響作為原始創作基石。",
+          "盤帶工藝技術：運用剪接（Splice）、倒放（Reverse）、變速（Speed Shift）重構聲音。",
+          "盲聽哲學（Acousmatic）：去除發聲源的視覺聯想，讓聽眾純粹關注聲音本身的質地。"
+        ],
+        composer: "薛費爾 (Pierre Schaeffer)［具體音樂開創先鋒］",
+        masterpiece: "《鐵路練習曲》(Étude aux chemins de fer, 1948)",
+        pieceReason: "具體音樂開山名作。錄製巴黎火車站蒸汽火車發動、鳴笛、輪軌摩擦聲，剪輯成驚人的節奏詩篇。",
+        youtubeUrl: "https://www.youtube.com/watch?v=N9pOq8u6-bA",
+        youtubeTimestamps: [
+          { time: "00:05", seconds: 5, label: "火車車輪啟動節奏", note: "鋼軌碰撞金屬聲被剪輯成極具現代律動感的連貫切分循環" },
+          { time: "01:05", seconds: 65, label: "蒸汽汽笛重複切片", note: "蒸汽鳴笛聲被多次截斷與重組，轉化為非日常的抽象聲響材料" },
+          { time: "02:00", seconds: 120, label: "多重音軌堆疊蒙太奇", note: "火車各部件聲音如交響樂織體般層疊展開，開創具體音樂新紀元" }
+        ],
+        expTitle: "生活中的聲音，也能成為音樂嗎？",
+        expDesc: "允許麥克風錄音或上傳音檔，體驗具體音樂作曲家如何將日常錄音倒轉、變速並賦予音樂美感。",
+        expType: "concrete",
+        question: "當我們把火車鳴笛聲倒轉、放慢兩倍後，它聽起來還像『火車』嗎？這如何改變了我們聽音樂的方式？",
+        hint: "這正是薛菲提出的『盲聽（Acousmatic）』：當聲音脫離了原本的物體來源，它就轉化為純粹的聲音質地（Sound Object），成為音樂構建的材料。"
+      }
+    ];
+
+    /* ==========================================================================
+       2. Web Audio API 音訊合成實驗引擎
+       ========================================================================== */
+    class SoundEngine {
+      constructor() {
+        this.ctx = null;
+        this.activeNodes = [];
+        this.phaseInterval = null;
+        this.analyser = null;
+        this.animFrameId = null;
+        this.concreteBuffer = null;
+        this.recorder = null;
+        this.recordedChunks = [];
+        this.activeSource = null;
+      }
+
+      initCtx() {
+        if (!this.ctx) {
+          const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+          this.ctx = new AudioContextClass();
+        }
+        if (this.ctx.state === 'suspended') {
+          this.ctx.resume();
+        }
+      }
+
+      stopAll() {
+        if (this.phaseInterval) {
+          if (typeof this.phaseInterval.clear === 'function') {
+            this.phaseInterval.clear();
+          } else {
+            clearInterval(this.phaseInterval);
+          }
+          this.phaseInterval = null;
+        }
+
+        this.activeNodes.forEach(node => {
+          try {
+            if (node.stop) node.stop();
+            if (node.disconnect) node.disconnect();
+          } catch(e) {}
+        });
+        this.activeNodes = [];
+
+        if (this.activeSource) {
+          try {
+            this.activeSource.stop();
+            this.activeSource.disconnect();
+          } catch(e) {}
+          this.activeSource = null;
+        }
+
+        if (this.animFrameId) {
+          cancelAnimationFrame(this.animFrameId);
+          this.animFrameId = null;
+        }
+      }
+
+      // 1. 印象樂派：五聲與全音音階調色盤
+      playImpressionism(freq, mode, isChord = true) {
+        this.initCtx();
+        const now = this.ctx.currentTime;
+        if (typeof triggerIslandWaterRipple === 'function') {
+          triggerIslandWaterRipple(0);
+        }
+
+        const freqs = isChord ? (
+          mode === 'whole'
+            ? [freq, freq * 1.2599, freq * 1.5874] // 全音音階增三色彩
+            : [freq, freq * 1.3348, freq * 1.4983, freq * 2.0] // 五聲音階開放空靈色彩
+        ) : [freq];
+
+        freqs.forEach((f, idx) => {
+          const osc = this.ctx.createOscillator();
+          const gain = this.ctx.createGain();
+
+          osc.type = mode === 'whole' ? 'triangle' : 'sine';
+          const startTime = now + idx * 0.08;
+          osc.frequency.setValueAtTime(f, startTime);
+
+          gain.gain.setValueAtTime(0.0001, startTime);
+          gain.gain.linearRampToValueAtTime(0.24 / Math.sqrt(freqs.length), startTime + 0.05);
+          gain.gain.exponentialRampToValueAtTime(0.0001, startTime + 2.0);
+
+          osc.connect(gain);
+          gain.connect(this.ctx.destination);
+
+          osc.start(startTime);
+          osc.stop(startTime + 2.05);
+          this.activeNodes.push(osc);
+        });
+      }
+
+      // 2. 表現主義：調性 vs 自由無調性對比
+      playExpressionism(type) {
+        this.stopAll();
+        this.initCtx();
+        const now = this.ctx.currentTime;
+
+        if (type === 'tonal') {
+          // 協和穩定：C大調主屬進行
+          const pattern = [
+            { f: 261.63, dur: 0.35, d: 0.0 }, // C
+            { f: 329.63, dur: 0.35, d: 0.35 }, // E
+            { f: 392.00, dur: 0.35, d: 0.70 }, // G
+            { f: 523.25, dur: 0.8, d: 1.05 }  // C (穩定解決)
+          ];
+          pattern.forEach(p => {
+            const osc = this.ctx.createOscillator();
+            const gain = this.ctx.createGain();
+            osc.type = 'triangle';
+            osc.frequency.setValueAtTime(p.f, now + p.d);
+            gain.gain.setValueAtTime(0.22, now + p.d);
+            gain.gain.exponentialRampToValueAtTime(0.0001, now + p.d + p.dur);
+            osc.connect(gain);
+            gain.connect(this.ctx.destination);
+            osc.start(now + p.d);
+            osc.stop(now + p.d + p.dur);
+            this.activeNodes.push(osc);
+          });
+        } else {
+          // 表現主義極端張力：小二度 + 三全音（完全無調性中心）
+          const atonal = [
+            { f: 277.18, dur: 0.35, d: 0.0 }, // C#4
+            { f: 293.66, dur: 0.35, d: 0.28 }, // D4 (小二度摩擦)
+            { f: 415.30, dur: 0.45, d: 0.60 }, // G#4
+            { f: 587.33, dur: 0.90, d: 0.95 }  // D5 (三全音懸浮未解決)
+          ];
+          atonal.forEach(p => {
+            const osc = this.ctx.createOscillator();
+            const gain = this.ctx.createGain();
+            osc.type = 'sawtooth';
+            osc.frequency.setValueAtTime(p.f, now + p.d);
+            gain.gain.setValueAtTime(0.18, now + p.d);
+            gain.gain.exponentialRampToValueAtTime(0.0001, now + p.d + p.dur);
+            osc.connect(gain);
+            gain.connect(this.ctx.destination);
+            osc.start(now + p.d);
+            osc.stop(now + p.d + p.dur);
+            this.activeNodes.push(osc);
+          });
+        }
+      }
+
+      // 3. 新古典主義：方整古典樂句 vs 現代改造
+      playNeoclassical(isModern = false, onStepCallback) {
+        this.stopAll();
+        this.initCtx();
+        const now = this.ctx.currentTime + 0.05;
+
+        // 發聲輔助函式：模擬古典明亮木管或弦樂撥奏
+        const triggerTone = (freq, time, dur, vol = 0.2, type = 'triangle') => {
+          const osc = this.ctx.createOscillator();
+          const gain = this.ctx.createGain();
+          osc.type = type;
+          osc.frequency.setValueAtTime(freq, time);
+
+          gain.gain.setValueAtTime(0.0001, time);
+          gain.gain.linearRampToValueAtTime(vol, time + 0.02);
+          gain.gain.exponentialRampToValueAtTime(0.0001, time + dur);
+
+          osc.connect(gain);
+          gain.connect(this.ctx.destination);
+          osc.start(time);
+          osc.stop(time + dur + 0.02);
+          this.activeNodes.push(osc);
+        };
+
+        if (!isModern) {
+          // 【版本 A：古典原型】方整對稱 4/4 拍古典樂句（18 世紀巴洛克/古典風格）
+          // 旋律：C4 - E4 - G4 - E4 | D4 - F4 - B3 - C4 (方整均衡，主屬主功能和聲)
+          const classicalNotes = [
+            { f: 261.63, t: 0.0, d: 0.35, label: "C4 (第1拍 主音)" },
+            { f: 329.63, t: 0.4, d: 0.35, label: "E4 (第2拍 中音)" },
+            { f: 392.00, t: 0.8, d: 0.35, label: "G4 (第3拍 屬音)" },
+            { f: 329.63, t: 1.2, d: 0.35, label: "E4 (第4拍 均衡)" },
+            { f: 293.66, t: 1.6, d: 0.35, label: "D4 (第1拍 屬和聲)" },
+            { f: 349.23, t: 2.0, d: 0.35, label: "F4 (第2拍 下屬音)" },
+            { f: 246.94, t: 2.4, d: 0.35, label: "B3 (第3拍 導音解決)" },
+            { f: 261.63, t: 2.8, d: 0.75, label: "C4 (第4拍 圓滿歸家)" }
+          ];
+
+          // 伴奏：清澈的古典分解和弦與持續低音
+          const classicalChords = [
+            { f: [130.81, 196.00], t: 0.0, d: 1.5, vol: 0.12 }, // C3 + G3
+            { f: [146.83, 196.00], t: 1.6, d: 1.1, vol: 0.12 }, // D3 + G3
+            { f: [130.81, 196.00, 261.63], t: 2.8, d: 0.8, vol: 0.14 } // C3 + G3 + C4
+          ];
+
+          classicalNotes.forEach((n, idx) => {
+            triggerTone(n.f, now + n.t, n.d, 0.22, 'triangle');
+            setTimeout(() => {
+              if (onStepCallback) onStepCallback(idx, n.label, false);
+            }, n.t * 1000);
+          });
+
+          classicalChords.forEach(c => {
+            c.f.forEach(freq => triggerTone(freq, now + c.t, c.d, c.vol, 'sine'));
+          });
+
+        } else {
+          // 【版本 B：現代改造】斯特拉溫斯基風格改造！
+          // 保留完全相同的主幹旋律音，但注入：
+          // 1. 突兀的切分音與不對稱強弱重音（Syncopation & Stabs）
+          // 2. 弱拍突襲的「雙重調性（Bitonality）」——在 C 大調旋律下猛烈撞擊 F# 大調和弦！
+          const modernNotes = [
+            { f: 261.63, t: 0.0,  d: 0.18, vol: 0.18, type: 'triangle', label: "C4 (跳音短促起步)" },
+            { f: 329.63, t: 0.28, d: 0.42, vol: 0.38, type: 'sawtooth', label: "E4 💥 突兀強拍提前切分！" },
+            { f: 392.00, t: 0.78, d: 0.16, vol: 0.20, type: 'triangle', label: "G4 (被推遲的弱音)" },
+            { f: 329.63, t: 1.02, d: 0.35, vol: 0.36, type: 'sawtooth', label: "E4 💥 重音突刺！" },
+            { f: 293.66, t: 1.48, d: 0.20, vol: 0.22, type: 'triangle', label: "D4 (俐落碎音)" },
+            { f: 349.23, t: 1.76, d: 0.40, vol: 0.38, type: 'sawtooth', label: "F4 💥 錯位拍擊" },
+            { f: 246.94, t: 2.22, d: 0.15, vol: 0.22, type: 'triangle', label: "B3 (懸空導音)" },
+            { f: 261.63, t: 2.45, d: 0.85, vol: 0.40, type: 'sawtooth', label: "C4 ⚡ 突兀爆發收尾！" }
+          ];
+
+          // 現代改造專屬：雙重調性（Bitonality）冷冽刺耳的 F# 大調 / 增四度伴奏音塊
+          const polytonalClashes = [
+            { f: [185.00, 233.08, 277.18], t: 0.28, d: 0.25, vol: 0.22 }, // F#3 - A#3 - C#4 (與 E4/C調劇烈碰撞)
+            { f: [185.00, 277.18],         t: 1.02, d: 0.22, vol: 0.20 }, // F#3 - C#4
+            { f: [185.00, 233.08, 369.99], t: 1.76, d: 0.28, vol: 0.24 }, // F#3 - A#3 - F#4
+            { f: [185.00, 277.18, 369.99], t: 2.45, d: 0.65, vol: 0.26 }  // 終止時拒絕純和諧，強行雙調性疊置！
+          ];
+
+          modernNotes.forEach((n, idx) => {
+            triggerTone(n.f, now + n.t, n.d, n.vol, n.type);
+            setTimeout(() => {
+              if (onStepCallback) onStepCallback(idx, n.label, true);
+            }, n.t * 1000);
+          });
+
+          polytonalClashes.forEach(c => {
+            c.f.forEach(freq => triggerTone(freq, now + c.t, c.d, c.vol, 'square'));
+          });
+        }
+      }
+
+      // 4. 極簡音樂：Steve Reich 雙軌相位錯移
+      startMinimalismPhase(onStepUpdate) {
+        this.stopAll();
+        this.initCtx();
+        const pattern = [261.63, 293.66, 329.63, 392.00, 440.00, 392.00]; // 經典 6 音循環
+        let step1 = 0;
+        let step2 = 0;
+        let isPhasing = false;
+        let isRunning = true;
+
+        const playNote = (freq, pan = 0) => {
+          if (!this.ctx || !isRunning) return;
+          const osc = this.ctx.createOscillator();
+          const gain = this.ctx.createGain();
+          const panner = this.ctx.createStereoPanner ? this.ctx.createStereoPanner() : null;
+
+          osc.type = 'sine';
+          osc.frequency.setValueAtTime(freq, this.ctx.currentTime);
+          gain.gain.setValueAtTime(0.18, this.ctx.currentTime);
+          gain.gain.exponentialRampToValueAtTime(0.0001, this.ctx.currentTime + 0.16);
+
+          if (panner) {
+            panner.pan.value = pan;
+            osc.connect(gain);
+            gain.connect(panner);
+            panner.connect(this.ctx.destination);
+          } else {
+            osc.connect(gain);
+            gain.connect(this.ctx.destination);
+          }
+
+          osc.start();
+          osc.stop(this.ctx.currentTime + 0.18);
+        };
+
+        const timer1 = setInterval(() => {
+          if (!isRunning) return;
+          playNote(pattern[step1], -0.6);
+          step1 = (step1 + 1) % pattern.length;
+          if (onStepUpdate) onStepUpdate(1, step1);
+        }, 180);
+
+        let tempo2 = 180;
+        let timer2 = setInterval(() => {
+          if (!isRunning) return;
+          playNote(pattern[step2], 0.6);
+          step2 = (step2 + 1) % pattern.length;
+          if (onStepUpdate) onStepUpdate(2, step2);
+        }, tempo2);
+
+        this.phaseInterval = {
+          timer1,
+          timer2,
+          setPhaseShift: (enable) => {
+            isPhasing = enable;
+            clearInterval(timer2);
+            tempo2 = enable ? 172 : 180; // 稍微加速，產生相位錯移
+            timer2 = setInterval(() => {
+              if (!isRunning) return;
+              playNote(pattern[step2], 0.6);
+              step2 = (step2 + 1) % pattern.length;
+              if (onStepUpdate) onStepUpdate(2, step2);
+            }, tempo2);
+          },
+          clear: () => {
+            isRunning = false;
+            clearInterval(timer1);
+            clearInterval(timer2);
+          }
+        };
+
+        return this.phaseInterval;
+      }
+
+      // 5. 電子音樂：合成器震盪器與濾波器示波
+      startElectronicSynth(waveform, freq, cutoff, canvasEl) {
+        this.stopAll();
+        this.initCtx();
+
+        const osc = this.ctx.createOscillator();
+        const filter = this.ctx.createBiquadFilter();
+        const gain = this.ctx.createGain();
+        this.analyser = this.ctx.createAnalyser();
+        this.analyser.fftSize = 256;
+
+        osc.type = waveform;
+        osc.frequency.setValueAtTime(freq, this.ctx.currentTime);
+
+        filter.type = 'lowpass';
+        filter.frequency.setValueAtTime(cutoff, this.ctx.currentTime);
+
+        gain.gain.setValueAtTime(0.24, this.ctx.currentTime);
+
+        osc.connect(filter);
+        filter.connect(gain);
+        gain.connect(this.analyser);
+        this.analyser.connect(this.ctx.destination);
+
+        osc.start();
+        this.activeNodes.push(osc);
+
+        if (canvasEl) {
+          const ctx2d = canvasEl.getContext('2d');
+          const bufferLength = this.analyser.frequencyBinCount;
+          const dataArray = new Uint8Array(bufferLength);
+
+          const draw = () => {
+            this.animFrameId = requestAnimationFrame(draw);
+            this.analyser.getByteTimeDomainData(dataArray);
+
+            ctx2d.fillStyle = 'rgb(15, 23, 42)';
+            ctx2d.fillRect(0, 0, canvasEl.width, canvasEl.height);
+            ctx2d.lineWidth = 2;
+            ctx2d.strokeStyle = '#8b5cf6';
+            ctx2d.beginPath();
+
+            const sliceWidth = canvasEl.width / bufferLength;
+            let x = 0;
+            for (let i = 0; i < bufferLength; i++) {
+              const v = dataArray[i] / 128.0;
+              const y = v * (canvasEl.height / 2);
+              if (i === 0) ctx2d.moveTo(x, y);
+              else ctx2d.lineTo(x, y);
+              x += sliceWidth;
+            }
+            ctx2d.lineTo(canvasEl.width, canvasEl.height / 2);
+            ctx2d.stroke();
+          };
+          draw();
+        }
+
+        return { osc, filter, gain };
+      }
+
+      // 6. 音列主義：十二音技法運算
+      playToneRow(row, onNotePlay) {
+        this.stopAll();
+        this.initCtx();
+        const now = this.ctx.currentTime;
+        // 半音音階基準頻率對照表 (C4 to B4)
+        const baseFreqs = [261.63, 277.18, 293.66, 311.13, 329.63, 349.23, 369.99, 392.00, 415.30, 440.00, 466.16, 493.88];
+
+        row.forEach((pitchIndex, idx) => {
+          const osc = this.ctx.createOscillator();
+          const gain = this.ctx.createGain();
+          const start = now + idx * 0.32;
+          const f = baseFreqs[pitchIndex % 12];
+
+          osc.type = 'square';
+          osc.frequency.setValueAtTime(f, start);
+
+          gain.gain.setValueAtTime(0.16, start);
+          gain.gain.exponentialRampToValueAtTime(0.0001, start + 0.28);
+
+          osc.connect(gain);
+          gain.connect(this.ctx.destination);
+          osc.start(start);
+          osc.stop(start + 0.3);
+          this.activeNodes.push(osc);
+
+          setTimeout(() => {
+            if (onNotePlay) onNotePlay(idx);
+          }, idx * 320);
+        });
+      }
+
+      // 7. 機遇音樂：亂數擲骰發聲
+      playChanceTone() {
+        this.initCtx();
+        const types = ['sine', 'triangle', 'sawtooth', 'square'];
+        const randomType = types[Math.floor(Math.random() * types.length)];
+        const randomFreq = 180 + Math.random() * 650;
+        const randomDur = 0.2 + Math.random() * 0.8;
+
+        const osc = this.ctx.createOscillator();
+        const gain = this.ctx.createGain();
+        osc.type = randomType;
+        osc.frequency.setValueAtTime(randomFreq, this.ctx.currentTime);
+
+        gain.gain.setValueAtTime(0.2, this.ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.0001, this.ctx.currentTime + randomDur);
+
+        osc.connect(gain);
+        gain.connect(this.ctx.destination);
+        osc.start();
+        osc.stop(this.ctx.currentTime + randomDur + 0.05);
+        this.activeNodes.push(osc);
+
+        return { type: randomType, freq: Math.round(randomFreq), dur: randomDur.toFixed(2) };
+      }
+
+      // 8. 具體音樂：真實錄音或上傳音檔加工
+      playConcreteSound(isReverse = false, playbackRate = 1.0) {
+        if (!this.concreteBuffer) return false;
+        this.stopAll();
+        this.initCtx();
+
+        const source = this.ctx.createBufferSource();
+        let bufferToPlay = this.concreteBuffer;
+
+        if (isReverse) {
+          const reversed = this.ctx.createBuffer(
+            this.concreteBuffer.numberOfChannels,
+            this.concreteBuffer.length,
+            this.concreteBuffer.sampleRate
+          );
+          for (let c = 0; c < this.concreteBuffer.numberOfChannels; c++) {
+            const srcData = this.concreteBuffer.getChannelData(c);
+            const dstData = reversed.getChannelData(c);
+            for (let i = 0; i < srcData.length; i++) {
+              dstData[i] = srcData[srcData.length - 1 - i];
+            }
+          }
+          bufferToPlay = reversed;
+        }
+
+        source.buffer = bufferToPlay;
+        source.playbackRate.setValueAtTime(playbackRate, this.ctx.currentTime);
+        source.connect(this.ctx.destination);
+        source.start();
+        this.activeSource = source;
+        return true;
+      }
+    }
+
+    const soundEngine = new SoundEngine();
+
+    /* ==========================================================================
+       3. Three.js 3D 場景建構與程序化立體島嶼
+       ========================================================================== */
+    let scene, camera, renderer, controls;
+    let islandMeshes = [];
+    let relationLines = [];
+    let isRelationsVisible = false;
+    let targetCameraPos = null;
+    let targetLookAt = new THREE.Vector3(0, 0, 0);
+
+    function initThreeScene() {
+      const canvas = document.getElementById('webgl-canvas');
+      scene = new THREE.Scene();
+      scene.fog = new THREE.FogExp2(0x030712, 0.008);
+
+      camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.5, 1000);
+      camera.position.set(0, 48, 72);
+
+      renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
+      renderer.setSize(window.innerWidth, window.innerHeight);
+      renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+      renderer.toneMapping = THREE.ACESFilmicToneMapping;
+
+      controls = new THREE.OrbitControls(camera, renderer.domElement);
+      controls.enableDamping = true;
+      controls.dampingFactor = 0.05;
+      controls.maxDistance = 180;
+      controls.minDistance = 15;
+      controls.maxPolarAngle = Math.PI / 2.05;
+
+      // 燈光：提升亮度，營造宇宙晶瑩色彩
+      const ambientLight = new THREE.AmbientLight(0xffffff, 1.25);
+      scene.add(ambientLight);
+
+      const dirLight = new THREE.DirectionalLight(0xfff7ed, 1.6);
+      dirLight.position.set(40, 80, 50);
+      scene.add(dirLight);
+
+      const rimLight1 = new THREE.PointLight(0x38bdf8, 2.8, 120);
+      rimLight1.position.set(-50, 20, -40);
+      scene.add(rimLight1);
+
+      const rimLight2 = new THREE.PointLight(0xf43f5e, 2.5, 120);
+      rimLight2.position.set(50, 20, 40);
+      scene.add(rimLight2);
+
+      // 背景星空粒子
+      const starGeo = new THREE.BufferGeometry();
+      const starCount = 1200;
+      const starPos = new Float32Array(starCount * 3);
+      for (let i = 0; i < starCount * 3; i += 3) {
+        starPos[i] = (Math.random() - 0.5) * 350;
+        starPos[i + 1] = (Math.random() - 0.2) * 200;
+        starPos[i + 2] = (Math.random() - 0.5) * 350;
+      }
+      starGeo.setAttribute('position', new THREE.BufferAttribute(starPos, 3));
+      const starMat = new THREE.PointsMaterial({ color: 0x94a3b8, size: 1.2, transparent: true, opacity: 0.7 });
+      const starPoints = new THREE.Points(starGeo, starMat);
+      scene.add(starPoints);
+
+      // 建構 8 座島嶼
+      buildAllIslands();
+
+      // 建構音樂歷史關係連線
+      buildRelationLines();
+
+      window.addEventListener('resize', onWindowResize);
+      canvas.addEventListener('click', onCanvasClick);
+    }
+
+    // 建構八座風格鮮明的 3D 程序化島嶼
+    function buildAllIslands() {
+      ISLANDS_DATA.forEach((data, index) => {
+        const islandGroup = new THREE.Group();
+        islandGroup.position.set(data.pos.x, data.pos.y, data.pos.z);
+        islandGroup.userData = { 
+          id: data.id, 
+          index: index, 
+          data: data, 
+          originalY: data.pos.y,
+          timelineOffset: 0,
+          targetTimelineOffset: 0
+        };
+
+        // 浮島基石主體
+        const baseGeom = new THREE.CylinderGeometry(7.5, 3.2, 5.5, 7);
+        const baseMat = new THREE.MeshStandardMaterial({
+          color: 0x1e293b,
+          roughness: 0.6,
+          metalness: 0.2,
+          flatShading: true
+        });
+        const baseMesh = new THREE.Mesh(baseGeom, baseMat);
+        baseMesh.position.y = -2.75;
+        islandGroup.add(baseMesh);
+
+        // 島面草皮／結晶層
+        const topGeom = new THREE.CylinderGeometry(7.8, 7.5, 1.2, 7);
+        const topMat = new THREE.MeshStandardMaterial({
+          color: data.color,
+          roughness: 0.35,
+          metalness: 0.45,
+          emissive: data.color,
+          emissiveIntensity: 0.25
+        });
+        const topMesh = new THREE.Mesh(topGeom, topMat);
+        topMesh.position.y = 0.6;
+        islandGroup.add(topMesh);
+
+        // 地面發光光環
+        const ringGeom = new THREE.RingGeometry(8.0, 9.4, 32);
+        const ringMat = new THREE.MeshBasicMaterial({
+          color: data.color,
+          side: THREE.DoubleSide,
+          transparent: true,
+          opacity: 0.7
+        });
+        const ringMesh = new THREE.Mesh(ringGeom, ringMat);
+        ringMesh.rotation.x = Math.PI / 2;
+        ringMesh.position.y = 1.3;
+        islandGroup.add(ringMesh);
+        islandGroup.userData.ringMesh = ringMesh;
+
+        // 各島專屬象徵物造型
+        buildIslandArtifact(islandGroup, data.expType, data.color);
+
+        scene.add(islandGroup);
+        islandMeshes.push(islandGroup);
+      });
+    }
+
+    // 激發 3D 水面光波脈衝
+    function triggerIslandWaterRipple(islandIndex = 0) {
+      const mesh = islandMeshes[islandIndex];
+      if (!mesh || !mesh.userData.ringMesh) return;
+      const ring = mesh.userData.ringMesh;
+      let progress = 0;
+      const origOpacity = ring.material.opacity;
+      
+      function pulse() {
+        progress += 0.05;
+        const factor = 1 + Math.sin(progress * Math.PI) * 0.4;
+        ring.scale.set(factor, factor, factor);
+        ring.material.opacity = Math.min(1.0, origOpacity + (1 - progress) * 0.5);
+        if (progress < 1) {
+          requestAnimationFrame(pulse);
+        } else {
+          ring.scale.set(1, 1, 1);
+          ring.material.opacity = origOpacity;
+        }
+      }
+      pulse();
+    }
+
+    // 各島專屬 3D 幾何象徵物
+    function buildIslandArtifact(group, expType, colorHex) {
+      const mat = new THREE.MeshStandardMaterial({
+        color: colorHex,
+        emissive: colorHex,
+        emissiveIntensity: 0.4,
+        roughness: 0.2,
+        metalness: 0.8
+      });
+
+      if (expType === 'impressionism') {
+        // 印象水光：三根剔透的水晶石柱
+        for (let i = 0; i < 3; i++) {
+          const crystalGeom = new THREE.ConeGeometry(1.2, 5.5 + i * 1.5, 5);
+          const crystal = new THREE.Mesh(crystalGeom, mat);
+          crystal.position.set((i - 1) * 2.6, 3.2 + i * 0.6, (i % 2) * 1.5);
+          crystal.rotation.y = i * 0.8;
+          group.add(crystal);
+        }
+      } else if (expType === 'expressionism') {
+        // 表現主義：扭曲破碎的尖角建築
+        for (let i = 0; i < 4; i++) {
+          const geom = new THREE.BoxGeometry(1.4, 6 + i * 1.8, 1.4);
+          const block = new THREE.Mesh(geom, mat);
+          block.position.set((i - 1.5) * 2.2, 3.5, ((i % 2) - 0.5) * 2.4);
+          block.rotation.set(0.2 * (i - 1.5), 0, -0.3 * (i - 1.5));
+          group.add(block);
+        }
+      } else if (expType === 'neoclassical') {
+        // 新古典主義：方整神殿柱廊與拱門
+        const pedimentGeom = new THREE.ConeGeometry(5.2, 2.2, 4);
+        const pediment = new THREE.Mesh(pedimentGeom, mat);
+        pediment.rotation.y = Math.PI / 4;
+        pediment.position.set(0, 7.4, 0);
+        group.add(pediment);
+
+        for (let i = 0; i < 4; i++) {
+          const colGeom = new THREE.CylinderGeometry(0.5, 0.5, 5.5, 8);
+          const col = new THREE.Mesh(colGeom, mat);
+          col.position.set((i - 1.5) * 2.4, 3.8, 0);
+          group.add(col);
+        }
+      } else if (expType === 'minimalism') {
+        // 極簡音樂：規律階梯與旋轉方塊
+        for (let i = 0; i < 5; i++) {
+          const boxGeom = new THREE.BoxGeometry(2.0, 1.0 + i * 1.2, 2.0);
+          const box = new THREE.Mesh(boxGeom, mat);
+          const angle = (i / 5) * Math.PI * 2;
+          box.position.set(Math.cos(angle) * 3.5, (1.0 + i * 1.2) / 2 + 1.2, Math.sin(angle) * 3.5);
+          group.add(box);
+        }
+      } else if (expType === 'electronic') {
+        // 電子音樂：合成器機櫃與發光波形環
+        const rackGeom = new THREE.BoxGeometry(4.5, 5.5, 2.5);
+        const rack = new THREE.Mesh(rackGeom, mat);
+        rack.position.set(0, 4.0, 0);
+        group.add(rack);
+
+        const torusGeom = new THREE.TorusGeometry(3.6, 0.25, 8, 32);
+        const torus = new THREE.Mesh(torusGeom, new THREE.MeshBasicMaterial({ color: 0xc084fc }));
+        torus.position.set(0, 7.5, 0);
+        torus.rotation.x = Math.PI / 3;
+        group.add(torus);
+      } else if (expType === 'serialism') {
+        // 音列主義：十二根嚴謹矩陣方柱
+        for (let i = 0; i < 12; i++) {
+          const barGeom = new THREE.BoxGeometry(0.8, 1.2 + (i % 6) * 0.9, 0.8);
+          const bar = new THREE.Mesh(barGeom, mat);
+          const angle = (i / 12) * Math.PI * 2;
+          bar.position.set(Math.cos(angle) * 4.2, (1.2 + (i % 6) * 0.9) / 2 + 1.2, Math.sin(angle) * 4.2);
+          group.add(bar);
+        }
+      } else if (expType === 'chance') {
+        // 機遇音樂：漂浮旋轉的多維骰子
+        const diceGeom = new THREE.DodecahedronGeometry(2.4);
+        const dice = new THREE.Mesh(diceGeom, mat);
+        dice.position.set(0, 5.5, 0);
+        group.add(dice);
+        group.userData.diceMesh = dice;
+      } else if (expType === 'concrete') {
+        // 具體音樂：復古盤帶雙輪與麥克風
+        const wheelGeom = new THREE.CylinderGeometry(2.0, 2.0, 0.4, 16);
+        const wheel1 = new THREE.Mesh(wheelGeom, mat);
+        const wheel2 = new THREE.Mesh(wheelGeom, mat);
+        wheel1.rotation.z = Math.PI / 2;
+        wheel2.rotation.z = Math.PI / 2;
+        wheel1.position.set(-2.2, 4.5, 0);
+        wheel2.position.set(2.2, 4.5, 0);
+        group.add(wheel1);
+        group.add(wheel2);
+        group.userData.reel1 = wheel1;
+        group.userData.reel2 = wheel2;
+      }
+    }
+
+    // 建構歷史與觀念連線網
+    function buildRelationLines() {
+      const relationPairs = [
+        {
+          from: "island-02", // 表現主義
+          to: "island-06",   // 音列主義
+          type: "歷史發展",
+          color: 0xf43f5e,
+          desc: "表現主義 ↔ 音列主義：荀白克從早期的『自由無調性』出發，為了解決失去調性中心後曲式結構渙散的危機，進一步開創了嚴謹理性的『十二音技法』。"
+        },
+        {
+          from: "island-05", // 電子音樂
+          to: "island-08",   // 具體音樂
+          type: "技術關聯",
+          color: 0x8b5cf6,
+          desc: "電子音樂 ↔ 具體音樂：20 世紀中葉的兩大聲音革命。西德科隆樂派主張由震盪器『純電子生成聲音』；法國巴黎樂派主張走出戶外『錄製既有真實聲音』，兩者最終交融為現代電聲音樂。"
+        },
+        {
+          from: "island-06", // 音列主義
+          to: "island-07",   // 機遇音樂
+          type: "觀念比較",
+          color: 0xd97706,
+          desc: "音列主義 ↔ 機遇音樂（極端控制 vs 完全解放）：音列主義試圖精確控制音樂的每一個參數；約翰・凱吉則主張將決定權交給擲骰與環境，反映出二戰後對『創作控制權』的深層哲學對抗。"
+        }
+      ];
+
+      relationPairs.forEach(pair => {
+        const fromMesh = islandMeshes.find(m => m.userData.id === pair.from);
+        const toMesh = islandMeshes.find(m => m.userData.id === pair.to);
+        if (!fromMesh || !toMesh) return;
+
+        const p1 = fromMesh.position.clone().add(new THREE.Vector3(0, 4, 0));
+        const p2 = toMesh.position.clone().add(new THREE.Vector3(0, 4, 0));
+        const mid = p1.clone().lerp(p2, 0.5).add(new THREE.Vector3(0, 10, 0));
+
+        const curve = new THREE.QuadraticBezierCurve3(p1, mid, p2);
+        const tubeGeom = new THREE.TubeGeometry(curve, 32, 0.35, 8, false);
+        const tubeMat = new THREE.MeshBasicMaterial({
+          color: pair.color,
+          transparent: true,
+          opacity: 0.85
+        });
+        const lineMesh = new THREE.Mesh(tubeGeom, tubeMat);
+        lineMesh.visible = false;
+        lineMesh.userData = pair;
+
+        scene.add(lineMesh);
+        relationLines.push(lineMesh);
+      });
+    }
+
+    // 視窗縮放自適應
+    function onWindowResize() {
+      camera.aspect = window.innerWidth / window.innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(window.innerWidth, window.innerHeight);
+      updateScreenLabels();
+    }
+
+    // 更新 3D 浮空標籤在螢幕上的位置
+    function updateScreenLabels() {
+      const container = document.getElementById('labels-container');
+      
+      islandMeshes.forEach((mesh, index) => {
+        let labelEl = document.getElementById(`label-${mesh.userData.id}`);
+        if (!labelEl) {
+          labelEl = document.createElement('div');
+          labelEl.id = `label-${mesh.userData.id}`;
+          labelEl.className = 'island-screen-label flex flex-col items-center gap-1';
+          labelEl.innerHTML = `
+            <div class="glass-panel px-3 py-1.5 rounded-xl border border-white/20 shadow-lg flex items-center gap-2 group-hover:scale-110 transition">
+              <span class="w-2 h-2 rounded-full" style="background-color: ${mesh.userData.data.themeHex}"></span>
+              <span class="text-xs font-black text-white whitespace-nowrap">${mesh.userData.data.title}</span>
+              <span class="text-[10px] text-slate-300 font-mono">${mesh.userData.data.number}</span>
+            </div>
+            <div class="w-1.5 h-1.5 rounded-full bg-white/70 shadow animate-pulse"></div>
+          `;
+          labelEl.onclick = (e) => {
+            e.stopPropagation();
+            focusOnIsland(mesh);
+          };
+          container.appendChild(labelEl);
+        }
+
+        // 計算 3D 座標在螢幕上的投影位置
+        const tempV = new THREE.Vector3();
+        mesh.getWorldPosition(tempV);
+        tempV.y += 8.5; // 標籤懸浮於島嶼頂部
+        tempV.project(camera);
+
+        const x = (tempV.x * 0.5 + 0.5) * window.innerWidth;
+        const y = (-(tempV.y * 0.5) + 0.5) * window.innerHeight;
+
+        // 若島嶼在相機背面則隱藏
+        if (tempV.z > 1) {
+          labelEl.style.opacity = '0';
+        } else {
+          labelEl.style.opacity = '1';
+          labelEl.style.left = `${x}px`;
+          labelEl.style.top = `${y}px`;
+        }
+      });
+    }
+
+    // 點擊島嶼射線偵測
+    function onCanvasClick(event) {
+      const raycaster = new THREE.Raycaster();
+      const mouse = new THREE.Vector2();
+      mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
+      mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
+
+      raycaster.setFromCamera(mouse, camera);
+
+      if (isRelationsVisible) {
+        const lineIntersects = raycaster.intersectObjects(relationLines);
+        if (lineIntersects.length > 0) {
+          const hit = lineIntersects[0].object.userData;
+          showToast(`【${hit.type}】${hit.desc}`);
+          return;
+        }
+      }
+
+      const intersects = raycaster.intersectObjects(islandMeshes, true);
+      if (intersects.length > 0) {
+        let rootGroup = intersects[0].object;
+        while (rootGroup.parent && !rootGroup.userData.id) {
+          rootGroup = rootGroup.parent;
+        }
+        if (rootGroup.userData.id) {
+          focusOnIsland(rootGroup);
+        }
+      }
+    }
+
+    // 平滑運鏡特寫聚焦島嶼
+    function focusOnIsland(islandGroup) {
+      const data = islandGroup.userData.data;
+      const targetPos = islandGroup.position.clone();
+
+      targetLookAt.copy(targetPos);
+      targetCameraPos = targetPos.clone().add(new THREE.Vector3(0, 12, 24));
+
+      openIslandInfoPanel(data);
+      showToast(`已進入：${data.title}（${data.composer}）`);
+    }
+
+    // 回到全景
+    function resetCameraOverview() {
+      targetLookAt.set(0, 0, 0);
+      targetCameraPos = new THREE.Vector3(0, 48, 72);
+      closeIslandInfoPanel(false);
+      showToast("已返回全景，請點選其他島嶼探索");
+    }
+
+    // 關閉右側面板（預設自動運鏡返回全景）
+    function closeIslandInfoPanel(autoResetCamera = true) {
+      const panel = document.getElementById('info-panel');
+      panel.classList.add('translate-x-full');
+      soundEngine.stopAll();
+      if (autoResetCamera) {
+        targetLookAt.set(0, 0, 0);
+        targetCameraPos = new THREE.Vector3(0, 48, 72);
+        showToast("已返回全景，請點選其他島嶼探索");
+      }
+    }
+
+    // 開啟右側島嶼資訊面板
+    function openIslandInfoPanel(data) {
+      document.getElementById('panel-badge').innerText = data.number;
+      document.getElementById('panel-badge').style.borderColor = data.themeHex;
+      document.getElementById('panel-badge').style.color = data.themeHex;
+
+      document.getElementById('panel-title').innerText = data.title;
+      document.getElementById('panel-subtitle').innerText = `${data.subtitle} (${data.period})`;
+      document.getElementById('panel-history').innerText = data.history;
+
+      const featList = document.getElementById('panel-features');
+      featList.innerHTML = '';
+      data.features.forEach(f => {
+        featList.innerHTML += `<li class="flex items-start gap-1.5"><span class="text-sky-400 font-bold">•</span><span>${f}</span></li>`;
+      });
+
+      document.getElementById('panel-composer').innerText = data.composer;
+      document.getElementById('panel-masterpiece').innerText = data.masterpiece;
+      document.getElementById('panel-piece-reason').innerText = data.pieceReason;
+
+      document.getElementById('panel-yt-full-link').href = data.youtubeUrl;
+
+      // 渲染精確時間軸按鈕
+      const tsContainer = document.getElementById('panel-yt-timestamps');
+      tsContainer.innerHTML = '';
+      data.youtubeTimestamps.forEach(ts => {
+        const row = document.createElement('div');
+        row.className = "bg-slate-950/60 p-2 rounded-lg border border-slate-800/80 flex flex-col gap-0.5";
+        row.innerHTML = `
+          <div class="flex items-center justify-between">
+            <span class="text-xs font-bold text-slate-200">${ts.label}</span>
+            <a href="${data.youtubeUrl}&t=${ts.seconds}s" target="_blank" rel="noopener noreferrer" class="px-2 py-0.5 rounded bg-red-600/30 hover:bg-red-600 text-red-300 hover:text-white font-mono text-[11px] font-bold transition flex items-center gap-1">
+              ▶ ${ts.time}
+            </a>
+          </div>
+          <span class="text-[10px] text-slate-400">${ts.note}</span>
+        `;
+        tsContainer.appendChild(row);
+      });
+
+      document.getElementById('panel-exp-title').innerText = data.expTitle;
+      document.getElementById('panel-exp-desc').innerText = data.expDesc;
+      document.getElementById('panel-question').innerText = data.question;
+      document.getElementById('panel-hint-box').innerText = data.hint;
+      document.getElementById('panel-hint-box').classList.add('hidden');
+
+      renderExperimentUI(data);
+
+      const panel = document.getElementById('info-panel');
+      panel.classList.remove('translate-x-full');
+    }
+
+    /* ==========================================================================
+       4. 聲音實驗室介面動態渲染引擎 (renderExperimentUI)
+       ========================================================================== */
+    function renderExperimentUI(data) {
+      const container = document.getElementById('panel-exp-container');
+      if (!container) return;
+      container.innerHTML = '';
+      soundEngine.stopAll();
+
+      const type = data.expType;
+      if (type === 'impressionism') {
+        renderImpressionismLab(container);
+      } else if (type === 'expressionism') {
+        renderExpressionismLab(container);
+      } else if (type === 'neoclassical') {
+        renderNeoclassicalLab(container);
+      } else if (type === 'minimalism') {
+        renderMinimalismLab(container);
+      } else if (type === 'electronic') {
+        renderElectronicLab(container);
+      } else if (type === 'serialism') {
+        renderSerialismLab(container);
+      } else if (type === 'chance') {
+        renderChanceLab(container);
+      } else if (type === 'concrete') {
+        renderConcreteLab(container);
+      }
+    }
+
+    // 1. 印象樂派調色盤實驗
+    function renderImpressionismLab(container) {
+      let mode = 'pentatonic';
+      let isChord = true;
+
+      const pentatonicScales = [
+        { name: 'C4 晨曦微光', freq: 261.63, col: 'from-sky-500 to-cyan-400' },
+        { name: 'D4 水面漣漪', freq: 293.66, col: 'from-teal-500 to-emerald-400' },
+        { name: 'E4 柔波倒影', freq: 329.63, col: 'from-emerald-500 to-teal-300' },
+        { name: 'G4 金色浪花', freq: 392.00, col: 'from-cyan-500 to-blue-400' },
+        { name: 'A4 薄霧初散', freq: 440.00, col: 'from-blue-500 to-indigo-400' }
+      ];
+
+      const wholeToneScales = [
+        { name: 'C4 迷霧初現', freq: 261.63, col: 'from-indigo-500 to-purple-400' },
+        { name: 'D4 浮動光斑', freq: 293.66, col: 'from-violet-500 to-purple-300' },
+        { name: 'E4 浪濤漸湧', freq: 329.63, col: 'from-purple-500 to-fuchsia-400' },
+        { name: 'F#4 幻彩折射', freq: 369.99, col: 'from-fuchsia-500 to-pink-400' },
+        { name: 'G#4 空間漂移', freq: 415.30, col: 'from-pink-500 to-rose-400' },
+        { name: 'A#4 天際消解', freq: 466.16, col: 'from-rose-500 to-amber-400' }
+      ];
+
+      function render() {
+        const currentList = mode === 'pentatonic' ? pentatonicScales : wholeToneScales;
+        container.innerHTML = `
+          <div class="space-y-3">
+            <div class="flex items-center gap-1.5 p-1 bg-slate-950/60 rounded-xl border border-slate-800">
+              <button id="btn-mode-penta" class="flex-1 py-1.5 px-2 rounded-lg text-xs font-bold transition ${mode === 'pentatonic' ? 'bg-sky-600 text-white shadow' : 'text-slate-400 hover:text-white'}">
+                五聲音階模式 (Pentatonic)
+              </button>
+              <button id="btn-mode-whole" class="flex-1 py-1.5 px-2 rounded-lg text-xs font-bold transition ${mode === 'whole' ? 'bg-sky-600 text-white shadow' : 'text-slate-400 hover:text-white'}">
+                全音音階模式 (Whole-tone)
+              </button>
+            </div>
+
+            <div class="flex items-center justify-between px-1 text-xs">
+              <span class="text-slate-400 font-medium">發聲形式：</span>
+              <div class="flex items-center gap-2">
+                <label class="flex items-center gap-1 cursor-pointer text-slate-300 hover:text-white">
+                  <input type="radio" name="play-form" value="chord" ${isChord ? 'checked' : ''} class="accent-sky-400">
+                  <span>琶音和聲色彩</span>
+                </label>
+                <label class="flex items-center gap-1 cursor-pointer text-slate-300 hover:text-white">
+                  <input type="radio" name="play-form" value="single" ${!isChord ? 'checked' : ''} class="accent-sky-400">
+                  <span>純單音</span>
+                </label>
+              </div>
+            </div>
+
+            <div class="grid grid-cols-2 gap-2 pt-1" id="palette-grid">
+              ${currentList.map((item, idx) => `
+                <button data-idx="${idx}" class="btn-palette p-3 rounded-xl bg-gradient-to-r ${item.col} text-white font-bold text-xs shadow-lg hover:scale-[1.03] active:scale-95 transition flex flex-col items-start gap-1">
+                  <span>${item.name}</span>
+                  <span class="text-[10px] opacity-80 font-mono">${Math.round(item.freq)} Hz</span>
+                </button>
+              `).join('')}
+            </div>
+
+            <p class="text-[10px] text-slate-400 italic pt-1 leading-relaxed border-t border-slate-800/60">
+              ※ 本實驗為調色盤與和聲色彩之教學原理示範，點擊色塊時 3D 島嶼周圍將同步激發水光漣漪。
+            </p>
+          </div>
+        `;
+
+        container.querySelector('#btn-mode-penta').onclick = () => { mode = 'pentatonic'; render(); };
+        container.querySelector('#btn-mode-whole').onclick = () => { mode = 'whole'; render(); };
+        container.querySelectorAll('input[name="play-form"]').forEach(radio => {
+          radio.onchange = (e) => { isChord = e.target.value === 'chord'; };
+        });
+
+        container.querySelectorAll('.btn-palette').forEach(btn => {
+          btn.onclick = () => {
+            const idx = parseInt(btn.dataset.idx);
+            const item = currentList[idx];
+            soundEngine.playImpressionism(item.freq, mode, isChord);
+          };
+        });
+      }
+
+      render();
+    }
+
+    // 2. 表現主義張力實驗
+    function renderExpressionismLab(container) {
+      container.innerHTML = `
+        <div class="space-y-3">
+          <p class="text-xs text-slate-300 leading-relaxed">
+            點擊以下兩組對比音型，聆聽從「穩定歸家」到「失去調性中心」的心理張力轉折：
+          </p>
+
+          <button id="btn-exp-tonal" class="w-full p-3 rounded-xl bg-slate-800/80 hover:bg-emerald-950/40 hover:border-emerald-500/50 border border-slate-700/80 transition text-left flex items-start gap-3 group">
+            <span class="text-xl group-hover:scale-110 transition-transform">🎼</span>
+            <div>
+              <div class="text-xs font-bold text-emerald-300">範例 A：傳統功能調性（C 大調主屬進行）</div>
+              <div class="text-[11px] text-slate-400 mt-0.5">旋律：C4 → E4 → G4 → C5（大三和弦協和、向心穩定、圓滿歸家）</div>
+            </div>
+          </button>
+
+          <button id="btn-exp-atonal" class="w-full p-3 rounded-xl bg-slate-800/80 hover:bg-rose-950/40 hover:border-rose-500/50 border border-slate-700/80 transition text-left flex items-start gap-3 group">
+            <span class="text-xl group-hover:scale-110 transition-transform">⚡</span>
+            <div>
+              <div class="text-xs font-bold text-rose-300">範例 B：自由無調性（小二度 ＋ 三全音）</div>
+              <div class="text-[11px] text-slate-400 mt-0.5">旋律：C#4 → D4 → G#4 → D5（極度緊繃、心理懸浮、不尋求和諧解決）</div>
+            </div>
+          </button>
+
+          <div id="exp-status-box" class="p-2.5 rounded-lg bg-slate-950/60 border border-slate-800 text-[11px] text-slate-300 min-h-[42px] flex items-center">
+            💡 請點擊上方任一範例聆聽對比。
+          </div>
+        </div>
+      `;
+
+      const statusBox = container.querySelector('#exp-status-box');
+
+      container.querySelector('#btn-exp-tonal').onclick = () => {
+        statusBox.innerHTML = '🟢 正在播放【傳統調性】：大小調體系圍繞著中央「主音（Tonic）」，聽者能強烈感知「離家」與「回家」的穩定安寧。';
+        soundEngine.playExpressionism('tonal');
+      };
+
+      container.querySelector('#btn-exp-atonal').onclick = () => {
+        statusBox.innerHTML = '🔴 正在播放【表現主義無調性】：利用小二度的刺耳摩擦與三全音的懸浮，徹底打破向心力，直接映射人類潛意識的驚惶與焦慮。';
+        soundEngine.playExpressionism('atonal');
+      };
+    }
+
+    // 3. 新古典主義樂句實驗
+    function renderNeoclassicalLab(container) {
+      container.innerHTML = `
+        <div class="space-y-3">
+          <p class="text-xs text-slate-300 leading-relaxed">
+            新古典主義保留古典方整樂句框架，但在和聲與節奏中注入現代的冷冽尖銳與切分重音：
+          </p>
+
+          <div class="grid grid-cols-4 sm:grid-cols-8 gap-1.5 p-2 bg-slate-950/60 rounded-xl border border-slate-800" id="neoclassic-steps">
+            ${['C4', 'E4', 'G4', 'E4', 'D4', 'F4', 'B3', 'C4'].map((n, i) => `
+              <div class="neo-step text-center p-1.5 rounded-lg bg-slate-900 border border-slate-800 text-[10px] font-mono text-slate-400">
+                <span class="block text-[9px] text-slate-500">${i+1}</span>
+                <span class="font-bold text-slate-200">${n}</span>
+              </div>
+            `).join('')}
+          </div>
+
+          <div id="neo-status-box" class="p-2 rounded-lg bg-slate-950/60 border border-slate-800 text-[11px] text-amber-300 min-h-[38px] flex items-center">
+            準備就緒，請選擇演奏模式。
+          </div>
+
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+            <button id="btn-neo-classic" class="p-3 rounded-xl bg-slate-800/80 hover:bg-slate-700 border border-slate-700 text-left transition flex flex-col gap-1">
+              <span class="text-xs font-bold text-white flex items-center gap-1.5">
+                <span>🏛️</span> 版本 A：古典原型
+              </span>
+              <span class="text-[10px] text-slate-400 leading-tight">方整 4/4 拍、清澈對位與主屬和聲解決</span>
+            </button>
+
+            <button id="btn-neo-modern" class="p-3 rounded-xl bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/40 text-left transition flex flex-col gap-1">
+              <span class="text-xs font-bold text-amber-200 flex items-center gap-1.5">
+                <span>⚡</span> 版本 B：現代改造
+              </span>
+              <span class="text-[10px] text-amber-300/80 leading-tight">斯特拉溫斯基切分重音 ＋ 雙重調性（Bitonality）</span>
+            </button>
+          </div>
+        </div>
+      `;
+
+      const steps = container.querySelectorAll('.neo-step');
+      const statusBox = container.querySelector('#neo-status-box');
+
+      const onStep = (idx, label, isModern) => {
+        steps.forEach((s, i) => {
+          if (i === idx) {
+            s.className = `neo-step text-center p-1.5 rounded-lg text-[10px] font-mono font-bold shadow ${isModern ? 'bg-amber-500 text-slate-950 border-amber-300' : 'bg-sky-500 text-white border-sky-300'}`;
+          } else {
+            s.className = 'neo-step text-center p-1.5 rounded-lg bg-slate-900 border border-slate-800 text-[10px] font-mono text-slate-400';
+          }
+        });
+        statusBox.innerHTML = `🎵 <strong>${isModern ? '【現代改造】' : '【古典原型】'}</strong> ${label}`;
+      };
+
+      container.querySelector('#btn-neo-classic').onclick = () => {
+        soundEngine.playNeoclassical(false, onStep);
+      };
+
+      container.querySelector('#btn-neo-modern').onclick = () => {
+        soundEngine.playNeoclassical(true, onStep);
+      };
+    }
+
+    // 4. 極簡音樂相位錯移實驗
+    function renderMinimalismLab(container) {
+      let phaseCtrl = null;
+      let isPlaying = false;
+      let isPhasing = false;
+
+      const notes = ['C4', 'D4', 'E4', 'G4', 'A4', 'G4'];
+
+      container.innerHTML = `
+        <div class="space-y-3">
+          <div id="mini-status" class="p-2.5 rounded-xl bg-slate-950/60 border border-slate-800 text-xs font-semibold text-emerald-300 flex items-center justify-between">
+            <span>🟢 待機中，請點擊啟動雙軌齊奏</span>
+            <span id="mini-state-badge" class="px-2 py-0.5 rounded text-[10px] bg-slate-800 text-slate-400 font-mono">STOPPED</span>
+          </div>
+
+          <div class="p-3 rounded-xl bg-slate-950/70 border border-emerald-500/30 space-y-2">
+            <div class="flex items-center justify-between text-xs font-bold text-emerald-400">
+              <span class="flex items-center gap-1.5">
+                <span class="w-2.5 h-2.5 rounded-full bg-emerald-400"></span>
+                音軌 1：基準聲部（左聲道 ◂ 等速行進）
+              </span>
+              <span id="track1-note" class="font-mono text-emerald-300">--</span>
+            </div>
+            <div class="grid grid-cols-6 gap-1" id="track1-steps">
+              ${notes.map((n, i) => `
+                <div class="t1-step text-center py-1 rounded bg-slate-900 border border-emerald-500/20 text-[11px] font-mono text-slate-400">
+                  <span class="block text-[9px] text-slate-500">${i+1}</span>
+                  <span>${n}</span>
+                </div>
+              `).join('')}
+            </div>
+          </div>
+
+          <div class="p-3 rounded-xl bg-slate-950/70 border border-amber-500/30 space-y-2">
+            <div class="flex items-center justify-between text-xs font-bold text-amber-400">
+              <span class="flex items-center gap-1.5">
+                <span class="w-2.5 h-2.5 rounded-full bg-amber-400"></span>
+                音軌 2：錯相聲部（右聲道 ▸ 漸進加速偏移）
+              </span>
+              <span id="track2-note" class="font-mono text-amber-300">--</span>
+            </div>
+            <div class="grid grid-cols-6 gap-1" id="track2-steps">
+              ${notes.map((n, i) => `
+                <div class="t2-step text-center py-1 rounded bg-slate-900 border border-amber-500/20 text-[11px] font-mono text-slate-400">
+                  <span class="block text-[9px] text-slate-500">${i+1}</span>
+                  <span>${n}</span>
+                </div>
+              `).join('')}
+            </div>
+          </div>
+
+          <div class="grid grid-cols-2 gap-2 pt-1">
+            <button id="btn-mini-play" class="py-2.5 px-3 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs transition shadow flex items-center justify-center gap-1.5">
+              <span>▶ 啟動雙軌齊奏</span>
+            </button>
+            <button id="btn-mini-phase" disabled class="py-2.5 px-3 rounded-xl bg-slate-800 text-slate-500 font-bold text-xs transition flex items-center justify-center gap-1.5 opacity-60">
+              <span>⚡ Phase Shift（開始錯相）</span>
+            </button>
+          </div>
+        </div>
+      `;
+
+      const t1Steps = container.querySelectorAll('.t1-step');
+      const t2Steps = container.querySelectorAll('.t2-step');
+      const t1Note = container.querySelector('#track1-note');
+      const t2Note = container.querySelector('#track2-note');
+      const statusText = container.querySelector('#mini-status span:first-child');
+      const stateBadge = container.querySelector('#mini-state-badge');
+      const btnPlay = container.querySelector('#btn-mini-play');
+      const btnPhase = container.querySelector('#btn-mini-phase');
+
+      let currentStep1 = 0;
+      let currentStep2 = 0;
+
+      const onStepUpdate = (track, step) => {
+        if (track === 1) {
+          currentStep1 = step;
+          t1Steps.forEach((s, idx) => {
+            if (idx === step) {
+              s.className = 't1-step text-center py-1 rounded bg-emerald-500 text-slate-950 font-bold border border-emerald-300 shadow';
+            } else {
+              s.className = 't1-step text-center py-1 rounded bg-slate-900 border border-emerald-500/20 text-[11px] font-mono text-slate-400';
+            }
+          });
+          t1Note.innerText = notes[step];
+        } else {
+          currentStep2 = step;
+          t2Steps.forEach((s, idx) => {
+            if (idx === step) {
+              s.className = 't2-step text-center py-1 rounded bg-amber-500 text-slate-950 font-bold border border-amber-300 shadow';
+            } else {
+              s.className = 't2-step text-center py-1 rounded bg-slate-900 border border-amber-500/20 text-[11px] font-mono text-slate-400';
+            }
+          });
+          t2Note.innerText = notes[step];
+        }
+
+        if (isPlaying) {
+          const diff = (currentStep2 - currentStep1 + 6) % 6;
+          if (diff === 0) {
+            statusText.innerText = '🟢 雙軌完全同步齊奏中';
+          } else {
+            statusText.innerText = `⚡ 錯相中！兩軌相差 ${diff} 個音符，形成新複節奏`;
+          }
+        }
+      };
+
+      btnPlay.onclick = () => {
+        if (!isPlaying) {
+          isPlaying = true;
+          isPhasing = false;
+          phaseCtrl = soundEngine.startMinimalismPhase(onStepUpdate);
+          btnPlay.innerHTML = '<span>⏹ 停止演奏</span>';
+          btnPlay.className = 'py-2.5 px-3 rounded-xl bg-rose-600 hover:bg-rose-500 text-white font-bold text-xs transition shadow flex items-center justify-center gap-1.5';
+          btnPhase.disabled = false;
+          btnPhase.className = 'py-2.5 px-3 rounded-xl bg-amber-600 hover:bg-amber-500 text-white font-bold text-xs transition shadow flex items-center justify-center gap-1.5 opacity-100';
+          btnPhase.innerHTML = '<span>⚡ Phase Shift（開始錯相）</span>';
+          stateBadge.innerText = 'PLAYING (IN-PHASE)';
+          stateBadge.className = 'px-2 py-0.5 rounded text-[10px] bg-emerald-500/20 text-emerald-300 font-mono border border-emerald-500/30';
+        } else {
+          isPlaying = false;
+          isPhasing = false;
+          soundEngine.stopAll();
+          phaseCtrl = null;
+          btnPlay.innerHTML = '<span>▶ 啟動雙軌齊奏</span>';
+          btnPlay.className = 'py-2.5 px-3 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs transition shadow flex items-center justify-center gap-1.5';
+          btnPhase.disabled = true;
+          btnPhase.className = 'py-2.5 px-3 rounded-xl bg-slate-800 text-slate-500 font-bold text-xs transition flex items-center justify-center gap-1.5 opacity-60';
+          statusText.innerText = '🟢 已停止，請點擊啟動雙軌齊奏';
+          stateBadge.innerText = 'STOPPED';
+          stateBadge.className = 'px-2 py-0.5 rounded text-[10px] bg-slate-800 text-slate-400 font-mono';
+        }
+      };
+
+      btnPhase.onclick = () => {
+        if (!isPlaying || !phaseCtrl) return;
+        isPhasing = !isPhasing;
+        phaseCtrl.setPhaseShift(isPhasing);
+        if (isPhasing) {
+          btnPhase.innerHTML = '<span>🔒 鎖定目前相位</span>';
+          btnPhase.className = 'py-2.5 px-3 rounded-xl bg-amber-500 text-slate-950 font-bold text-xs transition shadow flex items-center justify-center gap-1.5';
+          stateBadge.innerText = 'PHASING (SHIFTING)';
+          stateBadge.className = 'px-2 py-0.5 rounded text-[10px] bg-amber-500/20 text-amber-300 font-mono border border-amber-500/30 animate-pulse';
+        } else {
+          btnPhase.innerHTML = '<span>⚡ Phase Shift（再次錯相）</span>';
+          btnPhase.className = 'py-2.5 px-3 rounded-xl bg-amber-600 hover:bg-amber-500 text-white font-bold text-xs transition shadow flex items-center justify-center gap-1.5';
+          stateBadge.innerText = 'LOCKED PHASE';
+          stateBadge.className = 'px-2 py-0.5 rounded text-[10px] bg-sky-500/20 text-sky-300 font-mono border border-sky-500/30';
+        }
+      };
+    }
+
+    // 5. 電子音樂合成器實驗
+    function renderElectronicLab(container) {
+      let isPlaying = false;
+      let waveform = 'sine';
+      let freq = 260;
+      let cutoff = 1800;
+      let synthRef = null;
+
+      container.innerHTML = `
+        <div class="space-y-3">
+          <div class="space-y-1">
+            <div class="flex items-center justify-between text-xs">
+              <span class="text-slate-400 font-medium">即時音訊示波器：</span>
+              <span id="synth-status-badge" class="px-2 py-0.5 rounded text-[10px] bg-slate-800 text-slate-400 font-mono">STANDBY (靜音待機)</span>
+            </div>
+            <canvas id="synth-scope" width="360" height="70" class="w-full h-16 bg-slate-950 rounded-xl border border-slate-800 shadow-inner"></canvas>
+          </div>
+
+          <button id="btn-toggle-synth" class="w-full py-2.5 px-4 rounded-xl bg-purple-600 hover:bg-purple-500 text-white font-bold text-xs transition shadow flex items-center justify-center gap-2">
+            <span>▶ 啟動電子合成器</span>
+          </button>
+
+          <div class="space-y-1">
+            <span class="text-[11px] text-slate-400 font-medium">基礎震盪器波形（Waveform）：</span>
+            <div class="grid grid-cols-4 gap-1.5">
+              ${[
+                { id: 'sine', name: '正弦波' },
+                { id: 'triangle', name: '三角波' },
+                { id: 'sawtooth', name: '鋸齒波' },
+                { id: 'square', name: '方波' }
+              ].map(w => `
+                <button data-wf="${w.id}" class="btn-wf py-1.5 px-2 rounded-lg text-xs font-bold transition ${w.id === waveform ? 'bg-purple-600 text-white shadow' : 'bg-slate-900 hover:bg-slate-800 text-slate-400 border border-slate-800'}">
+                  ${w.name}
+                </button>
+              `).join('')}
+            </div>
+          </div>
+
+          <div class="space-y-1 bg-slate-950/50 p-2.5 rounded-xl border border-slate-800/80">
+            <div class="flex items-center justify-between text-xs">
+              <span class="text-slate-400">振盪頻率 (Pitch)：</span>
+              <span id="synth-freq-val" class="font-mono text-purple-300 font-bold">${freq} Hz</span>
+            </div>
+            <input id="slider-freq" type="range" min="110" max="880" value="${freq}" class="w-full h-1.5 bg-slate-800 rounded appearance-none cursor-pointer accent-purple-400">
+          </div>
+
+          <div class="space-y-1 bg-slate-950/50 p-2.5 rounded-xl border border-slate-800/80">
+            <div class="flex items-center justify-between text-xs">
+              <span class="text-slate-400">低通濾波截止 (Filter Cutoff)：</span>
+              <span id="synth-cutoff-val" class="font-mono text-purple-300 font-bold">${cutoff} Hz</span>
+            </div>
+            <input id="slider-cutoff" type="range" min="100" max="6000" value="${cutoff}" class="w-full h-1.5 bg-slate-800 rounded appearance-none cursor-pointer accent-purple-400">
+          </div>
+        </div>
+      `;
+
+      const scopeCanvas = container.querySelector('#synth-scope');
+      const btnToggle = container.querySelector('#btn-toggle-synth');
+      const statusBadge = container.querySelector('#synth-status-badge');
+      const freqVal = container.querySelector('#synth-freq-val');
+      const cutoffVal = container.querySelector('#synth-cutoff-val');
+      const sliderFreq = container.querySelector('#slider-freq');
+      const sliderCutoff = container.querySelector('#slider-cutoff');
+
+      const startSynth = () => {
+        synthRef = soundEngine.startElectronicSynth(waveform, freq, cutoff, scopeCanvas);
+        isPlaying = true;
+        btnToggle.innerHTML = '<span>⏹ 停止合成器</span>';
+        btnToggle.className = 'w-full py-2.5 px-4 rounded-xl bg-rose-600 hover:bg-rose-500 text-white font-bold text-xs transition shadow flex items-center justify-center gap-2';
+        statusBadge.innerText = 'PLAYING (發聲中)';
+        statusBadge.className = 'px-2 py-0.5 rounded text-[10px] bg-purple-500/20 text-purple-300 font-mono border border-purple-500/30 animate-pulse';
+      };
+
+      const stopSynth = () => {
+        soundEngine.stopAll();
+        synthRef = null;
+        isPlaying = false;
+        btnToggle.innerHTML = '<span>▶ 啟動電子合成器</span>';
+        btnToggle.className = 'w-full py-2.5 px-4 rounded-xl bg-purple-600 hover:bg-purple-500 text-white font-bold text-xs transition shadow flex items-center justify-center gap-2';
+        statusBadge.innerText = 'STANDBY (靜音待機)';
+        statusBadge.className = 'px-2 py-0.5 rounded text-[10px] bg-slate-800 text-slate-400 font-mono';
+      };
+
+      btnToggle.onclick = () => {
+        if (!isPlaying) startSynth();
+        else stopSynth();
+      };
+
+      container.querySelectorAll('.btn-wf').forEach(btn => {
+        btn.onclick = () => {
+          waveform = btn.dataset.wf;
+          container.querySelectorAll('.btn-wf').forEach(b => {
+            b.className = b.dataset.wf === waveform 
+              ? 'btn-wf py-1.5 px-2 rounded-lg text-xs font-bold transition bg-purple-600 text-white shadow'
+              : 'btn-wf py-1.5 px-2 rounded-lg text-xs font-bold transition bg-slate-900 hover:bg-slate-800 text-slate-400 border border-slate-800';
+          });
+          if (isPlaying && synthRef) {
+            synthRef.osc.type = waveform;
+          }
+        };
+      });
+
+      sliderFreq.oninput = (e) => {
+        freq = parseInt(e.target.value);
+        freqVal.innerText = `${freq} Hz`;
+        if (isPlaying && synthRef) {
+          synthRef.osc.frequency.setValueAtTime(freq, soundEngine.ctx.currentTime);
+        }
+      };
+
+      sliderCutoff.oninput = (e) => {
+        cutoff = parseInt(e.target.value);
+        cutoffVal.innerText = `${cutoff} Hz`;
+        if (isPlaying && synthRef) {
+          synthRef.filter.frequency.setValueAtTime(cutoff, soundEngine.ctx.currentTime);
+        }
+      };
+    }
+
+    // 6. 音列主義十二音演算實驗
+    function renderSerialismLab(container) {
+      const pitchNames = ['C', 'C♯', 'D', 'D♯', 'E', 'F', 'F♯', 'G', 'G♯', 'A', 'A♯', 'B'];
+      let currentRow = [0, 3, 2, 1, 5, 4, 7, 6, 9, 8, 11, 10];
+
+      function getPrime() { return [...currentRow]; }
+      function getRetrograde() { return [...currentRow].reverse(); }
+      function getInversion() {
+        const root = currentRow[0];
+        return currentRow.map(p => (2 * root - p + 24) % 12);
+      }
+      function getRetrogradeInversion() {
+        return getInversion().reverse();
+      }
+
+      function render() {
+        container.innerHTML = `
+          <div class="space-y-3">
+            <div class="flex items-center justify-between">
+              <span class="text-xs text-slate-400 font-medium">當前 12 音序列（Prime）：</span>
+              <button id="btn-shuffle-row" class="px-2 py-0.5 rounded bg-slate-800 hover:bg-indigo-600 text-[11px] text-slate-300 hover:text-white transition font-mono border border-slate-700">
+                ↺ 重新洗牌音列
+              </button>
+            </div>
+
+            <div class="grid grid-cols-6 sm:grid-cols-12 gap-1" id="serial-row-boxes">
+              ${currentRow.map((p, idx) => `
+                <div class="serial-box text-center p-1.5 rounded-lg bg-slate-900 border border-indigo-500/30 text-[11px] font-mono">
+                  <span class="block text-[8px] text-slate-500">${idx+1}</span>
+                  <span class="font-bold text-indigo-300">${pitchNames[p]}</span>
+                </div>
+              `).join('')}
+            </div>
+
+            <div class="grid grid-cols-2 gap-2 pt-1">
+              <button id="btn-play-p" class="p-2.5 rounded-xl bg-indigo-600/30 hover:bg-indigo-600 border border-indigo-500/40 text-indigo-200 hover:text-white text-xs font-bold transition flex items-center justify-center gap-1.5">
+                <span>▶ 原形 (Prime)</span>
+              </button>
+              <button id="btn-play-r" class="p-2.5 rounded-xl bg-indigo-600/30 hover:bg-indigo-600 border border-indigo-500/40 text-indigo-200 hover:text-white text-xs font-bold transition flex items-center justify-center gap-1.5">
+                <span>◀ 逆行 (Retrograde)</span>
+              </button>
+              <button id="btn-play-i" class="p-2.5 rounded-xl bg-indigo-600/30 hover:bg-indigo-600 border border-indigo-500/40 text-indigo-200 hover:text-white text-xs font-bold transition flex items-center justify-center gap-1.5">
+                <span>⇅ 倒影 (Inversion)</span>
+              </button>
+              <button id="btn-play-ri" class="p-2.5 rounded-xl bg-indigo-600/30 hover:bg-indigo-600 border border-indigo-500/40 text-indigo-200 hover:text-white text-xs font-bold transition flex items-center justify-center gap-1.5">
+                <span>⇋ 逆行倒影 (RI)</span>
+              </button>
+            </div>
+
+            <div id="serial-status" class="p-2 rounded-lg bg-slate-950/60 border border-slate-800 text-[11px] text-slate-300">
+              💡 點擊上方任一種變形，嚴格按照十二音數學排列發聲。
+            </div>
+          </div>
+        `;
+
+        const boxes = container.querySelectorAll('.serial-box');
+        const statusBox = container.querySelector('#serial-status');
+
+        const playWithAnim = (row, label) => {
+          statusBox.innerHTML = `🎵 正在演奏【${label}】：${row.map(p => pitchNames[p]).join(' - ')}`;
+          soundEngine.playToneRow(row, (stepIdx) => {
+            boxes.forEach((b, i) => {
+              if (i === stepIdx) {
+                b.className = 'serial-box text-center p-1.5 rounded-lg bg-indigo-500 text-white font-bold text-[11px] font-mono shadow-lg border border-indigo-300';
+              } else {
+                b.className = 'serial-box text-center p-1.5 rounded-lg bg-slate-900 border border-indigo-500/30 text-[11px] font-mono';
+              }
+            });
+          });
+        };
+
+        container.querySelector('#btn-shuffle-row').onclick = () => {
+          currentRow = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11].sort(() => Math.random() - 0.5);
+          render();
+        };
+
+        container.querySelector('#btn-play-p').onclick = () => playWithAnim(getPrime(), '原形 Prime');
+        container.querySelector('#btn-play-r').onclick = () => playWithAnim(getRetrograde(), '逆行 Retrograde');
+        container.querySelector('#btn-play-i').onclick = () => playWithAnim(getInversion(), '倒影 Inversion');
+        container.querySelector('#btn-play-ri').onclick = () => playWithAnim(getRetrogradeInversion(), '逆行倒影 Retrograde Inversion');
+      }
+
+      render();
+    }
+
+    // 7. 機遇音樂隨機實驗
+    function renderChanceLab(container) {
+      container.innerHTML = `
+        <div class="space-y-3">
+          <p class="text-xs text-slate-300 leading-relaxed">
+            約翰・凱吉相信，當作曲家放棄對聲音的絕對控制，意外的聲音便會自行綻放。
+          </p>
+
+          <div id="chance-result-box" class="p-3.5 rounded-2xl bg-slate-950/70 border border-amber-500/40 text-center space-y-2">
+            <span class="text-2xl block" id="chance-dice-icon">🎲</span>
+            <div class="text-xs text-slate-400">目前隨機生成聲音參數：</div>
+            <div id="chance-params" class="flex justify-around items-center text-xs font-mono font-bold text-amber-300 pt-1">
+              <span>波形: --</span>
+              <span>頻率: -- Hz</span>
+              <span>時值: -- 秒</span>
+            </div>
+          </div>
+
+          <div class="grid grid-cols-2 gap-2">
+            <button id="btn-roll-chance" class="p-3 rounded-xl bg-amber-600 hover:bg-amber-500 text-white font-bold text-xs transition shadow flex items-center justify-center gap-1.5">
+              <span>🎲 交給機遇（擲出 1 音）</span>
+            </button>
+            <button id="btn-roll-sequence" class="p-3 rounded-xl bg-slate-800 hover:bg-slate-700 text-amber-300 border border-amber-500/30 font-bold text-xs transition flex items-center justify-center gap-1.5">
+              <span>✦ 生成機遇短句</span>
+            </button>
+          </div>
+
+          <p class="text-[10px] text-slate-400 italic pt-1 leading-relaxed border-t border-slate-800/60">
+            ※ 說明：「機遇作曲（Chance Composition，如易經算籤）」與「演奏不確定性（Indeterminacy，現場留白）」是凱吉兩種不同層次的解放手法。
+          </p>
+        </div>
+      `;
+
+      const diceIcon = container.querySelector('#chance-dice-icon');
+      const paramsBox = container.querySelector('#chance-params');
+
+      container.querySelector('#btn-roll-chance').onclick = () => {
+        diceIcon.classList.add('animate-spin');
+        setTimeout(() => diceIcon.classList.remove('animate-spin'), 300);
+
+        const result = soundEngine.playChanceTone();
+        paramsBox.innerHTML = `
+          <span>波形: ${result.type}</span>
+          <span>頻率: ${result.freq} Hz</span>
+          <span>時值: ${result.dur}s</span>
+        `;
+      };
+
+      container.querySelector('#btn-roll-sequence').onclick = () => {
+        let count = 0;
+        const seqTimer = setInterval(() => {
+          if (count >= 5) {
+            clearInterval(seqTimer);
+            return;
+          }
+          const result = soundEngine.playChanceTone();
+          paramsBox.innerHTML = `
+            <span>波形: ${result.type}</span>
+            <span>頻率: ${result.freq} Hz</span>
+            <span>時值: ${result.dur}s (${count + 1}/5)</span>
+          `;
+          count++;
+        }, 350);
+      };
+    }
+
+    // 8. 具體音樂盤帶工藝實驗
+    function renderConcreteLab(container) {
+      let isRecording = false;
+      let mediaRecorder = null;
+      let recordedChunks = [];
+      let currentRate = 1.0;
+
+      container.innerHTML = `
+        <div class="space-y-3">
+          <div class="grid grid-cols-2 gap-2">
+            <button id="btn-record-mic" class="p-2.5 rounded-xl bg-rose-600/30 hover:bg-rose-600 border border-rose-500/40 text-rose-200 hover:text-white text-xs font-bold transition flex items-center justify-center gap-1.5">
+              <span id="mic-icon">🎙️</span>
+              <span id="mic-label">開始麥克風錄音</span>
+            </button>
+            <label class="p-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 hover:text-white text-xs font-bold transition flex items-center justify-center gap-1.5 cursor-pointer">
+              <span>📂 上傳環境音檔</span>
+              <input type="file" id="file-concrete-upload" accept="audio/*" class="hidden">
+            </label>
+          </div>
+
+          <div id="concrete-status" class="p-3 rounded-xl bg-slate-950/60 border border-slate-800 text-xs text-slate-300 space-y-1">
+            <div class="flex items-center gap-2">
+              <span class="w-2 h-2 rounded-full bg-amber-400"></span>
+              <strong id="concrete-filename" class="text-white">尚未載入真實錄音</strong>
+            </div>
+            <p class="text-[11px] text-slate-400">
+              請點擊上方按鈕錄製日常環境聲音（敲桌聲、說話聲、筆聲），或上傳音訊檔進行具體音樂盤帶工藝加工。
+            </p>
+          </div>
+
+          <div id="concrete-controls" class="space-y-2 opacity-50 pointer-events-none">
+            <div class="grid grid-cols-2 gap-2">
+              <button id="btn-play-normal" class="p-2.5 rounded-xl bg-amber-600 hover:bg-amber-500 text-white font-bold text-xs transition shadow flex items-center justify-center gap-1">
+                <span>▶ 正向播放 (1.0x)</span>
+              </button>
+              <button id="btn-play-reverse" class="p-2.5 rounded-xl bg-purple-600 hover:bg-purple-500 text-white font-bold text-xs transition shadow flex items-center justify-center gap-1">
+                <span>◀◀ 倒轉播放 (Reverse)</span>
+              </button>
+            </div>
+
+            <div class="flex items-center justify-between p-1.5 bg-slate-950/60 rounded-xl border border-slate-800 text-xs">
+              <span class="text-slate-400 font-medium px-2">播放速度：</span>
+              <div class="flex items-center gap-1">
+                <button data-rate="0.5" class="btn-rate px-2.5 py-1 rounded-lg text-xs font-bold transition bg-slate-800 text-slate-300 hover:bg-slate-700">0.5x 慢速</button>
+                <button data-rate="1.0" class="btn-rate px-2.5 py-1 rounded-lg text-xs font-bold transition bg-amber-600 text-white shadow">1.0x 原速</button>
+                <button data-rate="2.0" class="btn-rate px-2.5 py-1 rounded-lg text-xs font-bold transition bg-slate-800 text-slate-300 hover:bg-slate-700">2.0x 快速</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      `;
+
+      const btnRecord = container.querySelector('#btn-record-mic');
+      const micLabel = container.querySelector('#mic-label');
+      const fileInput = container.querySelector('#file-concrete-upload');
+      const fileNameEl = container.querySelector('#concrete-filename');
+      const controlsBox = container.querySelector('#concrete-controls');
+      const btnNormal = container.querySelector('#btn-play-normal');
+      const btnReverse = container.querySelector('#btn-play-reverse');
+
+      const enableControls = (title) => {
+        controlsBox.classList.remove('opacity-50', 'pointer-events-none');
+        fileNameEl.innerText = title;
+        fileNameEl.className = 'text-emerald-300 font-bold';
+      };
+
+      fileInput.onchange = (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = async (ev) => {
+          soundEngine.initCtx();
+          try {
+            soundEngine.concreteBuffer = await soundEngine.ctx.decodeAudioData(ev.target.result);
+            enableControls(`已載入音檔：${file.name}`);
+            showToast(`已成功載入音檔：${file.name}`);
+          } catch(err) {
+            showToast("音訊檔案解析失敗，請嘗試其他音訊格式");
+          }
+        };
+        reader.readAsArrayBuffer(file);
+      };
+
+      btnRecord.onclick = async () => {
+        if (!isRecording) {
+          try {
+            const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            mediaRecorder = new MediaRecorder(stream);
+            recordedChunks = [];
+
+            mediaRecorder.ondataavailable = (e) => {
+              if (e.data.size > 0) recordedChunks.push(e.data);
+            };
+
+            mediaRecorder.onstop = async () => {
+              const blob = new Blob(recordedChunks, { type: 'audio/webm' });
+              const arrayBuf = await blob.arrayBuffer();
+              soundEngine.initCtx();
+              try {
+                soundEngine.concreteBuffer = await soundEngine.ctx.decodeAudioData(arrayBuf);
+                enableControls("已錄製完成麥克風聲響");
+                showToast("麥克風錄音完成！可開始進行倒轉與變速加工");
+              } catch(err) {
+                showToast("錄音音訊處理失敗");
+              }
+            };
+
+            mediaRecorder.start();
+            isRecording = true;
+            micLabel.innerText = "錄音中... 再次點擊停止";
+            btnRecord.className = "p-2.5 rounded-xl bg-rose-600 text-white font-bold text-xs transition flex items-center justify-center gap-1.5 animate-pulse shadow-lg";
+          } catch(err) {
+            showToast("無法取得麥克風權限，可改用檔案上傳功能");
+          }
+        } else {
+          if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+            mediaRecorder.stop();
+          }
+          isRecording = false;
+          micLabel.innerText = "開始麥克風錄音";
+          btnRecord.className = "p-2.5 rounded-xl bg-rose-600/30 hover:bg-rose-600 border border-rose-500/40 text-rose-200 hover:text-white text-xs font-bold transition flex items-center justify-center gap-1.5";
+        }
+      };
+
+      btnNormal.onclick = () => {
+        soundEngine.playConcreteSound(false, currentRate);
+      };
+
+      btnReverse.onclick = () => {
+        soundEngine.playConcreteSound(true, currentRate);
+      };
+
+      container.querySelectorAll('.btn-rate').forEach(btn => {
+        btn.onclick = () => {
+          currentRate = parseFloat(btn.dataset.rate);
+          container.querySelectorAll('.btn-rate').forEach(b => {
+            b.className = parseFloat(b.dataset.rate) === currentRate
+              ? 'btn-rate px-2.5 py-1 rounded-lg text-xs font-bold transition bg-amber-600 text-white shadow'
+              : 'btn-rate px-2.5 py-1 rounded-lg text-xs font-bold transition bg-slate-800 text-slate-300 hover:bg-slate-700';
+          });
+          soundEngine.playConcreteSound(false, currentRate);
+        };
+      });
+    }
+
+    // 顯示輕量級 Toast 提示
+    function showToast(msg) {
+      const t = document.getElementById('toast');
+      t.innerText = msg;
+      t.classList.remove('opacity-0');
+      clearTimeout(t._timer);
+      t._timer = setTimeout(() => {
+        t.classList.add('opacity-0');
+      }, 3000);
+    }
+
+    /* ==========================================================================
+       5. 應用程式全域事件綁定與動畫主循環
+       ========================================================================== */
+    function setupEventListeners() {
+      // 停止所有實驗音訊按鈕
+      const stopAudioBtn = document.getElementById('btn-stop-audio');
+      if (stopAudioBtn) {
+        stopAudioBtn.onclick = () => {
+          soundEngine.stopAll();
+          showToast("已停止所有實驗聲音");
+        };
+      }
+
+      // 關閉面板（按 ✕ 自動返回全景）
+      const closePanelBtn = document.getElementById('btn-close-panel');
+      if (closePanelBtn) {
+        closePanelBtn.onclick = () => closeIslandInfoPanel(true);
+      }
+
+      // 參觀完畢按鈕（底部的「探索完畢，返回全景」按鈕）
+      const finishIslandBtn = document.getElementById('btn-finish-island');
+      if (finishIslandBtn) {
+        finishIslandBtn.onclick = () => resetCameraOverview();
+      }
+
+      // 支援鍵盤 ESC 鍵一鍵關閉並返回全景
+      window.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') {
+          closeIslandInfoPanel(true);
+        }
+      });
+
+      // 查看提示切換
+      const toggleHintBtn = document.getElementById('btn-toggle-hint');
+      if (toggleHintBtn) {
+        toggleHintBtn.onclick = () => {
+          const box = document.getElementById('panel-hint-box');
+          if (box) box.classList.toggle('hidden');
+        };
+      }
+
+      // 返回全景
+      const overviewBtn = document.getElementById('btn-overview');
+      if (overviewBtn) overviewBtn.onclick = resetCameraOverview;
+
+      // 切換與開啟／取消「音樂關係網」導覽面板
+      const relationsModal = document.getElementById('relations-modal');
+      const btnToggleRelations = document.getElementById('btn-toggle-relations');
+      const relationsBtnLabel = document.getElementById('relations-btn-label');
+      const relationsBtnIcon = document.getElementById('relations-btn-icon');
+
+      const setRelationsState = (active, showModal = true) => {
+        isRelationsVisible = active;
+        relationLines.forEach(l => l.visible = active);
+
+        if (active) {
+          if (btnToggleRelations) {
+            btnToggleRelations.classList.add('bg-sky-600', 'text-white', 'shadow-lg');
+            btnToggleRelations.classList.remove('bg-slate-800/80', 'text-slate-200');
+          }
+          if (relationsBtnLabel) relationsBtnLabel.innerText = "關閉關係網";
+          if (relationsBtnIcon) {
+            relationsBtnIcon.innerHTML = '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>';
+          }
+
+          if (showModal && relationsModal) {
+            relationsModal.classList.remove('hidden');
+            setTimeout(() => relationsModal.classList.remove('opacity-0'), 10);
+          }
+          showToast("已開啟音樂關係網（可隨時再點擊按鈕取消）");
+        } else {
+          if (btnToggleRelations) {
+            btnToggleRelations.classList.remove('bg-sky-600', 'text-white', 'shadow-lg');
+            btnToggleRelations.classList.add('bg-slate-800/80', 'text-slate-200');
+          }
+          if (relationsBtnLabel) relationsBtnLabel.innerText = "音樂關係網";
+          if (relationsBtnIcon) {
+            relationsBtnIcon.innerHTML = '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"></path>';
+          }
+
+          if (relationsModal) {
+            relationsModal.classList.add('opacity-0');
+            setTimeout(() => relationsModal.classList.add('hidden'), 200);
+          }
+          showToast("已關閉音樂關係網");
+        }
+      };
+
+      const hideModalOnly = () => {
+        if (relationsModal) {
+          relationsModal.classList.add('opacity-0');
+          setTimeout(() => relationsModal.classList.add('hidden'), 200);
+        }
+      };
+
+      // 頂部導航按鈕：若已開啟則「取消/關閉」，若未開啟則「開啟並展開說明」
+      if (btnToggleRelations) {
+        btnToggleRelations.onclick = () => {
+          if (isRelationsVisible) {
+            setRelationsState(false);
+          } else {
+            setRelationsState(true, true);
+          }
+        };
+      }
+
+      // 彈窗右上角 ✕ 與「關閉並取消關係網」按鈕
+      const closeRelBtn = document.getElementById('btn-close-relations');
+      if (closeRelBtn) closeRelBtn.onclick = () => setRelationsState(false);
+
+      const cancelRelBtn = document.getElementById('btn-cancel-relations');
+      if (cancelRelBtn) cancelRelBtn.onclick = () => setRelationsState(false);
+
+      // 「保留關係線，返回 3D 空間對照」按鈕
+      const doneRelBtn = document.getElementById('btn-done-relations');
+      if (doneRelBtn) {
+        doneRelBtn.onclick = () => {
+          hideModalOnly();
+          showToast("已保留關係線，隨時點擊頂部「關閉關係網」可取消");
+        };
+      }
+
+      // 點擊彈窗外部半透明背景
+      if (relationsModal) {
+        relationsModal.onclick = (e) => {
+          if (e.target === relationsModal) {
+            hideModalOnly();
+          }
+        };
+      }
+
+      // 關係卡片專屬「雙島特寫對照視角」跳轉
+      document.querySelectorAll('.btn-focus-relation').forEach(btn => {
+        btn.onclick = () => {
+          const pairIdx = parseInt(btn.dataset.pair);
+          hideModalOnly();
+          closeIslandInfoPanel();
+
+          if (pairIdx === 0) {
+            targetLookAt.set(-2, 1, -2);
+            targetCameraPos = new THREE.Vector3(-45, 28, 0);
+            showToast("已切換至【表現主義 ↔ 音列主義】雙島對照視角");
+          } else if (pairIdx === 1) {
+            targetLookAt.set(-2, 0, 12);
+            targetCameraPos = new THREE.Vector3(0, 36, 48);
+            showToast("已切換至【電子音樂 ↔ 具體音樂】雙島對照視角");
+          } else if (pairIdx === 2) {
+            targetLookAt.set(-4, 0, 26);
+            targetCameraPos = new THREE.Vector3(-4, 18, 52);
+            showToast("已切換至【音列主義 ↔ 機遇音樂】雙島對照視角");
+          }
+        };
+      });
+
+      // 年代探索滑桿
+      const slider = document.getElementById('timeline-slider');
+      const yearBadge = document.getElementById('timeline-year-badge');
+      const statusText = document.getElementById('timeline-status-text');
+      const activeTagsContainer = document.getElementById('timeline-active-tags');
+
+      // 更新年代探索視覺狀態函式
+      const updateTimelineVisuals = (year) => {
+        const activeIslands = [];
+
+        islandMeshes.forEach(mesh => {
+          const [start, end] = mesh.userData.data.activeYears;
+          const isActive = (year >= start && year <= end);
+
+          // 1. 3D 浮島物理垂直位移
+          mesh.userData.targetTimelineOffset = isActive ? 3.5 : -6.5;
+
+          // 2. 3D 材質與光環透明度調節
+          mesh.traverse(child => {
+            if (child.isMesh && child !== mesh.userData.ringMesh) {
+              child.material.transparent = true;
+              child.material.opacity = isActive ? 1.0 : 0.15;
+            }
+          });
+
+          if (mesh.userData.ringMesh) {
+            mesh.userData.ringMesh.material.opacity = isActive ? 0.95 : 0.05;
+            mesh.userData.ringMesh.scale.set(isActive ? 1.15 : 0.9, isActive ? 1.15 : 0.9, 1);
+          }
+
+          // 3. 浮空 HTML 標籤視覺高亮或暗淡
+          const labelEl = document.getElementById(`label-${mesh.userData.id}`);
+          if (labelEl) {
+            if (isActive) {
+              labelEl.classList.remove('island-label-inactive');
+              labelEl.classList.add('island-label-active');
+            } else {
+              labelEl.classList.remove('island-label-active');
+              labelEl.classList.add('island-label-inactive');
+            }
+          }
+
+          if (isActive) {
+            activeIslands.push(mesh);
+          }
+        });
+
+        // 4. 更新底部時間軸資訊看板與動態標籤
+        if (yearBadge) {
+          yearBadge.innerHTML = `<span class="text-white">${year} 年</span> ── <span class="text-amber-300 font-bold">${activeIslands.length} 個流派共存</span>`;
+        }
+        if (statusText) {
+          statusText.innerText = `（1900–2000 年代透視：觀察當代並存思潮）`;
+        }
+
+        if (activeTagsContainer) {
+          activeTagsContainer.innerHTML = '';
+          if (activeIslands.length === 0) {
+            activeTagsContainer.innerHTML = '<span class="text-[11px] text-slate-500 italic">該年份無主要流派在此興盛起始點</span>';
+          } else {
+            activeIslands.forEach(m => {
+              const d = m.userData.data;
+              const chip = document.createElement('button');
+              chip.className = "px-2.5 py-0.5 rounded-full text-[11px] font-bold text-white transition hover:scale-105 active:scale-95 flex items-center gap-1 shadow-md border border-white/20";
+              chip.style.backgroundColor = d.themeHex;
+              chip.innerHTML = `<span>●</span> <span>${d.title}</span> <span class="text-[9px] opacity-80 font-mono font-normal">(${d.period})</span>`;
+              chip.onclick = (e) => {
+                e.stopPropagation();
+                focusOnIsland(m);
+              };
+              activeTagsContainer.appendChild(chip);
+            });
+          }
+        }
+      };
+
+      // 綁定滑桿拖動事件
+      if (slider) {
+        slider.oninput = (e) => {
+          const year = parseInt(e.target.value);
+          updateTimelineVisuals(year);
+        };
+      }
+
+      // 重設全覽按鈕
+      const resetTimelineBtn = document.getElementById('btn-timeline-reset');
+      if (resetTimelineBtn) {
+        resetTimelineBtn.onclick = () => {
+          if (yearBadge) yearBadge.innerText = "全流派並存全覽";
+          if (statusText) statusText.innerText = "（拖曳下方滑桿觀察歷史興衰）";
+          if (slider) slider.value = 1890;
+          if (activeTagsContainer) {
+            activeTagsContainer.innerHTML = '<span class="text-[11px] text-slate-400 italic">目前為全部 8 座流派島嶼共同顯現的全景模式。</span>';
+          }
+
+          islandMeshes.forEach(mesh => {
+            mesh.userData.targetTimelineOffset = 0;
+            mesh.traverse(child => {
+              if (child.isMesh) {
+                child.material.opacity = 1.0;
+                child.material.transparent = false;
+              }
+            });
+            if (mesh.userData.ringMesh) {
+              mesh.userData.ringMesh.material.opacity = 0.7;
+              mesh.userData.ringMesh.scale.set(1, 1, 1);
+            }
+            const labelEl = document.getElementById(`label-${mesh.userData.id}`);
+            if (labelEl) {
+              labelEl.classList.remove('island-label-active', 'island-label-inactive');
+              labelEl.style.opacity = '1';
+              labelEl.style.transform = 'translate(-50%, -100%) scale(1)';
+            }
+          });
+          showToast("已重設為全部流派歷史共存視野");
+        };
+      }
+
+      if (activeTagsContainer) {
+        activeTagsContainer.innerHTML = '<span class="text-[11px] text-slate-400 italic">目前為全部 8 座流派島嶼共同顯現的全景模式。</span>';
+      }
+
+      // 洪佳慧老師會客室彈窗
+      const teacherModal = document.getElementById('teacher-modal');
+      const openTeacher = () => {
+        if (!teacherModal) return;
+        teacherModal.classList.remove('hidden');
+        setTimeout(() => teacherModal.classList.remove('opacity-0'), 10);
+      };
+      const closeTeacher = () => {
+        if (!teacherModal) return;
+        teacherModal.classList.add('opacity-0');
+        setTimeout(() => teacherModal.classList.add('hidden'), 200);
+      };
+
+      const openTeacherBtn = document.getElementById('btn-open-teacher');
+      if (openTeacherBtn) openTeacherBtn.onclick = openTeacher;
+
+      const closeTeacherBtn = document.getElementById('btn-close-teacher');
+      if (closeTeacherBtn) closeTeacherBtn.onclick = closeTeacher;
+
+      const startExpBtn = document.getElementById('btn-start-exploring');
+      if (startExpBtn) startExpBtn.onclick = closeTeacher;
+
+      // 操作說明彈窗
+      const helpModal = document.getElementById('help-modal');
+      const openHelpBtn = document.getElementById('btn-open-help');
+      if (openHelpBtn) {
+        openHelpBtn.onclick = () => {
+          if (!helpModal) return;
+          helpModal.classList.remove('hidden');
+          setTimeout(() => helpModal.classList.remove('opacity-0'), 10);
+        };
+      }
+
+      const closeHelpBtn = document.getElementById('btn-close-help');
+      if (closeHelpBtn) {
+        closeHelpBtn.onclick = () => {
+          if (!helpModal) return;
+          helpModal.classList.add('opacity-0');
+          setTimeout(() => helpModal.classList.add('hidden'), 200);
+        };
+      }
+    }
+
+    // 3D 渲染與動態主循環
+    let clock = new THREE.Clock();
+    function animate() {
+      requestAnimationFrame(animate);
+
+      const elapsed = clock.getElapsedTime();
+
+      // 各島嶼浮島自然上下起伏動態 + 時間軸升降平滑插值
+      islandMeshes.forEach((mesh, idx) => {
+        // 平滑插值更新時間軸垂直偏移量
+        mesh.userData.timelineOffset += ((mesh.userData.targetTimelineOffset || 0) - mesh.userData.timelineOffset) * 0.08;
+
+        const bobbing = Math.sin(elapsed * 1.2 + idx * 0.8) * 0.45;
+        mesh.position.y = mesh.userData.originalY + mesh.userData.timelineOffset + bobbing;
+
+        // 象徵物輕微旋轉
+        if (mesh.userData.diceMesh) {
+          mesh.userData.diceMesh.rotation.y = elapsed * 0.4;
+        }
+      });
+
+      // 相機平滑插值運鏡
+      if (targetCameraPos) {
+        camera.position.lerp(targetCameraPos, 0.045);
+        controls.target.lerp(targetLookAt, 0.045);
+        if (camera.position.distanceTo(targetCameraPos) < 0.2) {
+          targetCameraPos = null;
+        }
+      }
+
+      controls.update();
+      renderer.render(scene, camera);
+      updateScreenLabels();
+    }
+
+    // 啟動入口
+    window.addEventListener('DOMContentLoaded', () => {
+      initThreeScene();
+      setupEventListeners();
+      animate();
+    });
+  </script>
+</body>
+</html>
